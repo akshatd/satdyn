@@ -16,13 +16,6 @@ The satellite is in a circular orbit with the following parameters:
 - Altitude: $h = 5 x 10^5 m$
 - Inclination: $i = 0$
 
-Forces acting on the satellite:
-
-- Gravitational force: $\vec{F_g}$
-- ~~Aerodynamic drag: $\vec{F_d}$~~
-- ~~Solar radiation pressure: $\vec{F_s}$~~
-- ~~Thrust: $\vec{F_t}$~~
-
 The satellite is equipped with the following sensors:
 
 - IMU
@@ -33,9 +26,22 @@ The satellite is equipped with the following actuators:
 - Magnetic torquers
 - Thrusters
 
+Forces acting on the satellite:
+
+- Gravitational force: $\vec{F_g}$
+- ~~Aerodynamic drag: $\vec{F_d}$~~
+- ~~Solar radiation pressure: $\vec{F_s}$~~
+- ~~Thrust: $\vec{F_t}$~~
+
+Torques acting on the satellite:
+
+- ~~Magnetic torque: $\vec{T_m}$~~
+- ~~Reaction wheel torque: $\vec{T_r}$~~
+- ~~Thruster torque: $\vec{T_t}$~~
+
 ## Satellite Translational Dynamics
 
-Translational dynamics define the motion of the satellite without considering the rotation. The states considered here are just the position and velocity of the satellite in the Earth Centered Inertial (ECI) frame. Let the vector from the center of the Earth to the satellite's center of mass be $\vec{r} = [x, y, z]^T$ and the velocity of the satellite be $\vec{v} = [p, q, r]^T$. Then,
+Translational dynamics define the motion of the satellite without considering the rotation. The states considered here are just the position and velocity of the satellite in the Earth Centered Inertial (ECI) frame. Let the vector from the center of the Earth to the satellite's center of mass be $\vec{r} = [x, y, z]^T$ and the velocity of the satellite be $\vec{v} = [u, v, w]^T$. Then,
 
 $$
 \dot{\vec{r}} = \vec{v}
@@ -100,4 +106,27 @@ $$
 q = vcos(i) \\
 r = vsin(i)
 \end{aligned}
+$$
+
+## Satellite Rotational Dynamics
+
+We use quaternions to represent the angular orientation of the satellite. The quaternion $\vec{q} = [q_0, q_1, q_2, q_3]^T$ represents the rotation of the satellite from the ECI frame to the body frame. The angular velocity of the satellite is given by $\vec{\omega} = [p, q, r]^T$. The quaternion derivative is given by:
+
+$$
+\dot{\vec{q}} = \frac{1}{2}\begin{bmatrix}
+q_4 & -q_3 & q_2 \\
+q_3 & q_4 & -q_1 \\
+-q_2 & q_1 & q_4 \\
+-q_1 & -q_2 & -q_3
+\end{bmatrix}\begin{bmatrix}
+p \\
+q \\
+r
+\end{bmatrix}
+$$
+
+The total qtorque acting on the satellite is given by:
+
+$$
+\vec{T} = \vec{T_m} + \vec{T_r} + \vec{T_t}
 $$
