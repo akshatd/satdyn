@@ -1,6 +1,9 @@
 classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
     % Implements the satellite object
     % State definition: x = [x, y, z, u, v, w, q_1, q_2, q_3, q_4, p, q, r,OmeReac_1; OmeReac_2; ... ;OmeReac_N_react]
+    % note that [q1 q2 q3 q4] = quat_BA_(B or A), the quaternion
+    % representing rotation of body FB from inertial FA, resolved in FB or
+    % FA (same result)
     % Controls definition: U = [OmeReacDot_1; OmeReacDot_2; ...; OmeReacDot_N_react];
 
     properties
@@ -17,8 +20,12 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
         tArr
 
         OmegaRefA_BodyArr   % store OmegaRefA_Body
+        QuatRefA_BodyArr   % store QuatRefA_Body
 
         OmegaRef_Prev = zeros(3,1);
+
+        Body_int_506 = zeros(3,1); % integrator vector state for option 506
+        Delta_W0_Body % store initial delta W
 
     end
     
@@ -67,6 +74,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             obj.statesArr(:,1) = states0;
             obj.tArr = zeros(1,params.Nsim);
             obj.OmegaRefA_BodyArr = zeros(3,params.Nsim);
+            obj.QuatRefA_BodyArr = zeros(4,params.Nsim);
 
             % Reaction wheel
             obj.params.N_react = size(obj.params.gs_b_arr,2);
@@ -82,10 +90,13 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             obj.params.Itot_Body = obj.params.J_SatBody_C; % TODO!! This is wrong
         end
 
-        function [U,TorqueB_C_ResB] = GetControls(obj,PosRef,VelRef,QuatRef,OmegaRefA_Body)
+        function [U,TorqueB_C_ResB] = GetControls(obj,PosRef,VelRef,QuatRefA_Body,OmegaRefA_Body)
             % Inputs: 
+            % QuatRefA_Body = quaternion representing Fref wrt FA,
+            % expressed in body frame
             % OmegaRefA_Body = reference angular vel (FR wrt FA), expressed
-            % in body frame
+            % in body frame. Must match kinematically to QuatRefA_Body for
+            % attitude control
 
             % Outputs:
             % TorqueB_C_ResB is for intermediate study, where we directly
@@ -100,6 +111,20 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             OmegeRefDot_Body = (OmegaRefA_Body - obj.OmegaRef_Prev)/obj.params.Ts;
             J_BC_OmegaBA_Body = obj.params.Itot_Body*OmegaBA_Body;
             Delta_W_Body = OmegaBA_Body - OmegaRefA_Body;
+            if obj.SimCnt == 0 obj.Delta_W0_Body = Delta_W_Body; end;
+
+            % quaternion error
+            quat_BA_Body_k = Xk(7:10); % FB quat wrt FA
+            O_BA_K = quat2dcm([quat_BA_Body_k(end);quat_BA_Body_k(1:3)]'); % [TODO: use my code and compare]
+            O_RefA_K = quat2dcm([QuatRefA_Body(end);QuatRefA_Body(1:3)]');
+            O_BR_K = O_BA_K*(O_RefA_K');
+
+            if true % obtain thru DCM
+                [err_quat_BR_Body_ScalerFirst] = dcm2quat(O_BR_K);
+                err_quat_BR_Body = [err_quat_BR_Body_ScalerFirst(2:4)';err_quat_BR_Body_ScalerFirst(1)]; % convert to scaler last from Matlab
+            else % direct quaternion [TODO: use direct quat and compare!]
+            end
+            err_quat_scaler_BR_Body = err_quat_BR_Body(end); err_quat_vec_BR_Body = err_quat_BR_Body(1:3);
 
             U = zeros(obj.params.N_react,1);
             TorqueB_C_ResB = [];
@@ -112,16 +137,24 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
                     P = diag([1.0;1.0;1.0]);
                     TorqueB_C_ResB = cross(OmegaRefA_Body,J_BC_OmegaBA_Body) + obj.params.Itot_Body*OmegeRefDot_Body ...
                                     -P*Delta_W_Body;
+                case 506 % 3D attitude control option 1 using PID
+                    % compute the integral Z
+                    Kp = 0.1; Ki = 0.00; Kd = 3.0;
+                    obj.Body_int_506 = obj.Body_int_506 + SignJP(err_quat_scaler_BR_Body)*Kp*err_quat_vec_BR_Body*obj.params.Ts;
+                    Z_body = obj.Body_int_506 + obj.params.Itot_Body*(Delta_W_Body - obj.Delta_W0_Body); 
+
+                    TorqueB_C_ResB = cross(OmegaBA_Body,J_BC_OmegaBA_Body) + obj.params.Itot_Body*OmegeRefDot_Body ...
+                                    -Kd*Delta_W_Body - Kp*SignJP(err_quat_scaler_BR_Body) *err_quat_vec_BR_Body - Kd*Ki*Z_body;
                 otherwise
                     
             end
         end
 
-        function Step(obj,PosRef,VelRef,QuatRef,OmegaRefA_Body)
+        function Step(obj,PosRef,VelRef,QuatRefA_Body,OmegaRefA_Body)
             % 1 step in the current simulation
 
             % Compute controls
-            [U,TorqueB_C_ResB] = obj.GetControls(PosRef,VelRef,QuatRef,OmegaRefA_Body);
+            [U,TorqueB_C_ResB] = obj.GetControls(PosRef,VelRef,QuatRefA_Body,OmegaRefA_Body);
 
             if obj.SimCnt == 0 % init UarrStore based on number of controls
                 obj.UarrStore = zeros(length(U),obj.params.Nsim);
@@ -138,12 +171,14 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
            obj.statesArr(:,obj.SimCnt + 2) = X(end,:)';
            obj.tArr(:,obj.SimCnt + 1) = obj.SimT;
            obj.OmegaRefA_BodyArr(:,obj.SimCnt + 1) = OmegaRefA_Body;
+           obj.QuatRefA_BodyArr(:,obj.SimCnt + 1) = QuatRefA_Body;
 
            obj.SimCnt = obj.SimCnt + 1;
            obj.SimT = obj.SimCnt*obj.params.Ts;
            
 
            obj.OmegaRef_Prev = OmegaRefA_Body;
+           if mod(obj.SimCnt,10) == 0 fprintf('%d\n',obj.SimCnt); end
 
         end        
        
@@ -179,7 +214,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
 
             % Reaction wheel dynamics
             omega_reac = x(14:(13+sat_params.N_react));
-            external_torque = zeros(3,1); % Edit here for external torques
+            external_torque = zeros(3,1); % Edit here for external torques [3;-2;1]*0.001;
             I_wdot = -cross(omega,sat_params.Itot_Body*omega) + external_torque;
             OmeReacDot = U(1:sat_params.N_react);
 

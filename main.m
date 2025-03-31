@@ -45,7 +45,10 @@ sat_params.I_ws = 10;  % TO SET! spin axis moments of inertia (wrt wheel's cente
 sat_params.gs_b_arr = [1 0 0;0 1 0; 0 0 1;1/sqrt(3) 1/sqrt(3) 1/sqrt(3);]'; % unit spin axis in satellite body's frame Fb [column vector x N_react] matrix
 sat_params.MassReactionWheel = 2; % mass of SINGLE reaction wheel, to be added to satellite mass [Kg]
 
-sat_params.ControlScheme = 505; % -1 = do nothing, 505 = Attitude rate control option 1
+% -1 = do nothing%
+% 505 = Attitude rate control option 1
+% 506 = 3D Attitude control option 1 
+sat_params.ControlScheme = 506; 
 
 % Initial reaction wheel speed
 W_React0arr = zeros(size(sat_params.gs_b_arr,2),1);
@@ -63,16 +66,12 @@ for k = 0:(Nsim-1)
     % set commands 
     PosRef = zeros(3,1);
     VelRef = zeros(3,1);
-    QuatRef = zeros(3,1);
-    OmegaRefA_Body = zeros(3,1); 
+    QuatRefA_Body = [zeros(3,1);1];
+    OmegaRefA_Body = zeros(3,1); %OmegaRefA_Body(1) = 1*pi/180*sin(2*pi/1000*SimT); OmegaRefA_Body(2) = 3*pi/180*cos(2*pi/1500*SimT); OmegaRefA_Body(3) = 0.5*pi/180*sin(2*pi/750*SimT);
 
-    OmegaRefA_Body(1) = 1*pi/180*sin(2*pi/1000*SimT);
-    OmegaRefA_Body(2) = 3*pi/180*cos(2*pi/1500*SimT);
-    OmegaRefA_Body(3) = 0.5*pi/180*sin(2*pi/750*SimT);
+    Satellite1.Step(PosRef,VelRef,QuatRefA_Body,OmegaRefA_Body);
 
-    Satellite1.Step(PosRef,VelRef,QuatRef,OmegaRefA_Body);
-
-    Satellite2.Step(PosRef,VelRef,QuatRef,OmegaRefA_Body); % currently redundant as it is identical to satellite 1
+    % Satellite2.Step(PosRef,VelRef,QuatRef,OmegaRefA_Body); % currently redundant as it is identical to satellite 1
 end
 
 %% Plot results
@@ -82,6 +81,7 @@ statesArr = SatellitePlot.statesArr(:,1:end-1);
 UarrStore = SatellitePlot.UarrStore;
 tArr = SatellitePlot.tArr;
 OmegaRefA_BodyArr = SatellitePlot.OmegaRefA_BodyArr;
+QuatRefA_BodyArr = SatellitePlot.QuatRefA_BodyArr;
 
 PlotAttitude1;
 return;
