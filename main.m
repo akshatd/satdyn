@@ -45,7 +45,7 @@ sat_params.I_ws = 10;  % TO SET! spin axis moments of inertia (wrt wheel's cente
 sat_params.gs_b_arr = [1 0 0;0 1 0; 0 0 1;1/sqrt(3) 1/sqrt(3) 1/sqrt(3);]'; % unit spin axis in satellite body's frame Fb [column vector x N_react] matrix
 sat_params.MassReactionWheel = 2; % mass of SINGLE reaction wheel, to be added to satellite mass [Kg]
 
-sat_params.ControlScheme = -1; % do nothing
+sat_params.ControlScheme = 505; % -1 = do nothing, 505 = Attitude rate control option 1
 
 % Initial reaction wheel speed
 W_React0arr = zeros(size(sat_params.gs_b_arr,2),1);
@@ -58,15 +58,21 @@ Satellite2 = SatelliteClass(sat_params,R0,V0,Q0,W0,W_React0arr,planet);
 %% Simulate 
 
 for k = 0:(Nsim-1)
+    SimT = k*Ts;
+
     % set commands 
     PosRef = zeros(3,1);
     VelRef = zeros(3,1);
     QuatRef = zeros(3,1);
-    OmegaRef = zeros(3,1);
+    OmegaRefA_Body = zeros(3,1); 
 
-    Satellite1.Step(PosRef,VelRef,QuatRef,OmegaRef);
+    OmegaRefA_Body(1) = 1*pi/180*sin(2*pi/1000*SimT);
+    OmegaRefA_Body(2) = 3*pi/180*cos(2*pi/1500*SimT);
+    OmegaRefA_Body(3) = 0.5*pi/180*sin(2*pi/750*SimT);
 
-    Satellite2.Step(PosRef,VelRef,QuatRef,OmegaRef); % currently redundant as it is identical to satellite 1
+    Satellite1.Step(PosRef,VelRef,QuatRef,OmegaRefA_Body);
+
+    Satellite2.Step(PosRef,VelRef,QuatRef,OmegaRefA_Body); % currently redundant as it is identical to satellite 1
 end
 
 %% Plot results
@@ -75,6 +81,10 @@ SatellitePlot = Satellite1; % select satellite to plot
 statesArr = SatellitePlot.statesArr(:,1:end-1);
 UarrStore = SatellitePlot.UarrStore;
 tArr = SatellitePlot.tArr;
+OmegaRefA_BodyArr = SatellitePlot.OmegaRefA_BodyArr;
+
+PlotAttitude1;
+return;
 
 % plot earth and satellite in 3D
 [X, Y, Z] = sphere();
@@ -87,6 +97,7 @@ surf(X, Y, Z, 'EdgeColor', 'none', 'DisplayName', 'Earth');
 hold on;
 axis equal;
 plot3(statesArr(1,:)/1000, statesArr(2,:)/1000, statesArr(3,:)/1000, 'r', 'LineWidth', 2, 'DisplayName', 'Satellite');
+xlabel('x'); ylabel('y'); zlabel('z');
 legend;
 
 % plot satellite states
@@ -110,13 +121,15 @@ euls = quat2eul([quats(:, 4), quats(:, 1:3)], 'ZYX'); % convert to scalar first 
 
 lm(kk) = subplot(nRows,nCols,kk); kk = kk + 1; hold on;
 plot(tArr,euls*180/pi, 'LineWidth', 2)
-legend("$psi$", "$theta$", "$phi$", 'Interpreter', 'latex');
+legend("$\psi$", "$\theta$", "$\phi$", 'Interpreter', 'latex');
 title('Angular Position');
 ylabel('(deg)');
 
 lm(kk) = subplot(nRows,nCols,kk); kk = kk + 1; hold on;
-plot(tArr,statesArr(11,:)*180/pi,tArr,statesArr(12,:)*180/pi,tArr,statesArr(13,:)*180/pi, 'LineWidth', 2)
-legend("$p$", "$q$", "$r$", 'Interpreter', 'latex');
+plot(tArr,statesArr(11,:)*180/pi,'r',tArr,OmegaRefA_BodyArr(1,:)*180/pi,'r--', 'LineWidth', 2);
+plot(tArr,statesArr(12,:)*180/pi,'b',tArr,OmegaRefA_BodyArr(2,:)*180/pi,'b--', 'LineWidth', 2);
+plot(tArr,statesArr(13,:)*180/pi,'k',tArr,OmegaRefA_BodyArr(3,:)*180/pi,'k--', 'LineWidth', 2);
+legend("$p$","$p_{ref}$", "$q$", "$q_{ref}$", "$r$", "$r_{ref}$", 'Interpreter', 'latex');
 title('Angular velocity');
 ylabel('(deg/s)');
 
