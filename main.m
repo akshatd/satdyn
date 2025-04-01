@@ -49,7 +49,8 @@ sat_params.MassReactionWheel = 2; % mass of SINGLE reaction wheel, to be added t
 % 505 = Attitude rate control option 1
 % 506 = 3D Attitude control option 1 
 % 507 = 3D Attitude control option 2
-sat_params.ControlScheme = 507; 
+% 508 = 3D Attitude control option 3
+sat_params.ControlScheme = 508; 
 
 % Initial reaction wheel speed
 W_React0arr = zeros(size(sat_params.gs_b_arr,2),1);
@@ -69,7 +70,7 @@ for k = 0:(Nsim-1)
     VelRef = zeros(3,1);
     QuatRefA_Body = [zeros(3,1);1]; QuatRefA_Body = zeros(4,1); QuatRefA_Body(1 + floor(mod(k,200)/50)) = 1; %QuatRefA_Body(1) = 1;% 
 
-    OmegaRefA_Body = zeros(3,1); %OmegaRefA_Body(1) = 1*pi/180*sin(2*pi/1000*SimT); OmegaRefA_Body(2) = 3*pi/180*cos(2*pi/1500*SimT); OmegaRefA_Body(3) = 0.5*pi/180*sin(2*pi/750*SimT);
+    OmegaRefA_Body = zeros(3,1); % OmegaRefA_Body(1) = 1*pi/180*sin(2*pi/1000*SimT); OmegaRefA_Body(2) = 3*pi/180*cos(2*pi/1500*SimT); OmegaRefA_Body(3) = 0.5*pi/180*sin(2*pi/750*SimT);
 
     Satellite1.Step(PosRef,VelRef,QuatRefA_Body,OmegaRefA_Body);
 

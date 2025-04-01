@@ -32,6 +32,8 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
 
         UarrGuess_Prev_507  % previous iteration's optimal guess
 
+        W_BA_Cmd_Body_Prev_508  % previous W_BA_Cmd_Body
+
     end
     
     methods (Access = public)
@@ -119,7 +121,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             % frame
             Xk = obj.statesArr(:,obj.SimCnt + 1);
             OmegaBA_Body = Xk(11:13);
-            OmegeRefDot_Body = (OmegaRefA_Body - obj.OmegaRef_Prev)/obj.params.Ts;
+            OmegeRefA_Dot_Body = (OmegaRefA_Body - obj.OmegaRef_Prev)/obj.params.Ts;
             J_BC_OmegaBA_Body = obj.params.Itot_Body*OmegaBA_Body;
             Delta_W_Body = OmegaBA_Body - OmegaRefA_Body;
             if obj.SimCnt == 0 obj.Delta_W0_Body = Delta_W_Body; end;
@@ -141,20 +143,17 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             TorqueB_C_ResB = [];
 
             switch obj.params.ControlScheme
-                case 505 % atittude-rate control option 1 using P control 
-                    % Implements the attitude-rate control option 1, essentially a
-                    % nonlinear proportional controller of delta w = w_BA - w_ref
-                    % resolved in satellite BODY frame
-                    P = diag([1.0;1.0;1.0]);
-                    TorqueB_C_ResB = cross(OmegaRefA_Body,J_BC_OmegaBA_Body) + obj.params.Itot_Body*OmegeRefDot_Body ...
-                                    -P*Delta_W_Body;
+                case 505 % atittude-rate control option 1 using P control                    
+                    TorqueB_C_ResB = SatelliteClass.GetAttitudeRateControl_Option1_Pctrl(OmegaRefA_Body,...
+                        OmegeRefA_Dot_Body,J_BC_OmegaBA_Body,OmegaBA_Body,obj.params);
+
                 case 506 % 3D attitude control option 1 using PID
                     % compute the integral Z
                     Kp = 0.1; Ki = 0.002; Kd = 3.0;
                     obj.Body_int_506 = obj.Body_int_506 + SignJP(err_quat_scaler_BR_Body)*Kp*err_quat_vec_BR_Body*obj.params.Ts;
                     Z_body = obj.Body_int_506 + obj.params.Itot_Body*(Delta_W_Body - obj.Delta_W0_Body); 
 
-                    TorqueB_C_ResB = cross(OmegaBA_Body,J_BC_OmegaBA_Body) + obj.params.Itot_Body*OmegeRefDot_Body ...
+                    TorqueB_C_ResB = cross(OmegaBA_Body,J_BC_OmegaBA_Body) + obj.params.Itot_Body*OmegeRefA_Dot_Body ...
                                     -Kd*Delta_W_Body - Kp*SignJP(err_quat_scaler_BR_Body) *err_quat_vec_BR_Body - Kd*Ki*Z_body;
                 case 507 % 3D attitude control option 2 using basic nonlinear MPC
                     options = optimoptions('fmincon','Display','iter','MaxIterations',50,'Algorithm','sqp');
@@ -177,6 +176,25 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
                     TorqueB_C_ResB = Uarr_opt(1:3);
 
 
+                case 508 % 3D attitude control option 3 (P-outer, W-inner)
+                    Kp = 0.1; Wcmd_mag_rads_limit = 1*pi/180;
+
+                    % Compute W_BA_Cmd_Body
+                    delta_WrefA_Body = -Kp*SignJP(err_quat_scaler_BR_Body)*err_quat_vec_BR_Body;
+                    W_BA_Cmd_Body = delta_WrefA_Body + OmegaRefA_Body;
+                    Wcmd_mag_rads = norm(W_BA_Cmd_Body);
+                    if Wcmd_mag_rads > Wcmd_mag_rads_limit
+                        W_BA_Cmd_Body = W_BA_Cmd_Body*Wcmd_mag_rads_limit/Wcmd_mag_rads;
+                    end
+                    if obj.SimCnt == 0 obj.W_BA_Cmd_Body_Prev_508 = W_BA_Cmd_Body;end
+
+                    OmegeCmdA_Dot_Body = (W_BA_Cmd_Body - obj.W_BA_Cmd_Body_Prev_508)/obj.params.Ts;
+
+                    % inner-loop
+                    TorqueB_C_ResB = SatelliteClass.GetAttitudeRateControl_Option1_Pctrl(W_BA_Cmd_Body,...
+                        OmegeCmdA_Dot_Body,J_BC_OmegaBA_Body,OmegaBA_Body,obj.params);
+
+                    obj.W_BA_Cmd_Body_Prev_508 = W_BA_Cmd_Body;
                 otherwise
                     
             end
@@ -279,6 +297,18 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             % Note: g(Uarr) <=0, h(Uarr) = 0
             g = [];            
             h = [];
+        end
+
+        function TorqueB_C_ResB = GetAttitudeRateControl_Option1_Pctrl(OmegaCmdA_Body,OmegeCmdA_Dot_Body,J_BC_OmegaBA_Body,OmegaBA_Body,params)
+            % atittude-rate control option 1 using P control 
+            % Implements the attitude-rate control option 1, essentially a
+            % nonlinear proportional controller of delta w = w_BA - w_CmdA
+            % resolved in satellite BODY frame
+            % Note that the command is OmegaCmdA
+            Delta_W_Body = OmegaBA_Body - OmegaCmdA_Body;
+            Pgain_Matrix = diag([1.0;1.0;1.0]);
+            TorqueB_C_ResB = cross(OmegaCmdA_Body,J_BC_OmegaBA_Body) + params.Itot_Body*OmegeCmdA_Dot_Body ...
+                            -Pgain_Matrix*Delta_W_Body;
         end
 
         function xdot = satellite_dynamics(t, x,U, planet, sat_params,TorqueB_C_ResB)
