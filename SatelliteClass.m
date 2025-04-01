@@ -19,6 +19,9 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
         UarrStore 
         tArr
 
+        TorqueB_C_ResB_Prev
+        U_Prev
+
         OmegaRefA_BodyArr   % store OmegaRefA_Body
         QuatRefA_BodyArr   % store QuatRefA_Body
 
@@ -26,6 +29,8 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
 
         Body_int_506 = zeros(3,1); % integrator vector state for option 506
         Delta_W0_Body % store initial delta W
+
+        UarrGuess_Prev_507  % previous iteration's optimal guess
 
     end
     
@@ -88,6 +93,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             end
 
             obj.params.Itot_Body = obj.params.J_SatBody_C; % TODO!! This is wrong
+            obj.params.Itot_inv_Body = inv(obj.params.Itot_Body);
         end
 
         function [U,TorqueB_C_ResB] = GetControls(obj,PosRef,VelRef,QuatRefA_Body,OmegaRefA_Body)
@@ -103,6 +109,11 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             % control the torque on satellite body, relative to COM,
             % expressed in body frame. Set to empty if doing proper
             % actuator control
+
+            if obj.SimCnt == 0
+                obj.TorqueB_C_ResB_Prev = zeros(3,1);
+                obj.U_Prev = zeros(obj.params.N_react,1);
+            end
 
             % Here we compute standard attitude control terms, all in body
             % frame
@@ -139,12 +150,33 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
                                     -P*Delta_W_Body;
                 case 506 % 3D attitude control option 1 using PID
                     % compute the integral Z
-                    Kp = 0.1; Ki = 0.00; Kd = 3.0;
+                    Kp = 0.1; Ki = 0.002; Kd = 3.0;
                     obj.Body_int_506 = obj.Body_int_506 + SignJP(err_quat_scaler_BR_Body)*Kp*err_quat_vec_BR_Body*obj.params.Ts;
                     Z_body = obj.Body_int_506 + obj.params.Itot_Body*(Delta_W_Body - obj.Delta_W0_Body); 
 
                     TorqueB_C_ResB = cross(OmegaBA_Body,J_BC_OmegaBA_Body) + obj.params.Itot_Body*OmegeRefDot_Body ...
                                     -Kd*Delta_W_Body - Kp*SignJP(err_quat_scaler_BR_Body) *err_quat_vec_BR_Body - Kd*Ki*Z_body;
+                case 507 % 3D attitude control option 2 using basic nonlinear MPC
+                    options = optimoptions('fmincon','Display','iter','MaxIterations',50,'Algorithm','sqp');
+                    Xk_MPC2 = [quat_BA_Body_k;OmegaBA_Body];
+                    ell = 10; % MPC horizon
+                    Q_err_quat_vec_BR_Body = 0.1*eye(3);
+                    Q_Delta_W_Body = 0.5*eye(3);
+                    R_Delta_U  = 0.1*eye(3);
+
+                    obj_ = @(Uarr) SatelliteClass.obj_fun_MPC_Option2(obj.params,Uarr,Xk_MPC2,obj.TorqueB_C_ResB_Prev,ell,QuatRefA_Body,OmegaRefA_Body,Q_err_quat_vec_BR_Body,Q_Delta_W_Body,R_Delta_U);
+                    NONLCON = @(Uarr) SatelliteClass.constr_fun_MPC_Option2(Uarr,obj.params);
+                    % fmincon(J,W0,A1,B1,A2,B2,LB_W,UB_W,NONLCON), min(W) J(W) s.t. A1*W  <= B1, A2*W  = B2
+                    % LB_W <= W <= UB_W. [g,h] = NONLCON(W) where g(W) <= 0, h(W) = 0 and 
+                    if obj.SimCnt ==0 obj.UarrGuess_Prev_507 = ones(3*ell,1)*0.01;end
+                    UB = ones(3*ell,1)*inf;
+                    LB = -UB;
+                    Uarr_opt = fmincon(obj_,[obj.UarrGuess_Prev_507(4:end); obj.UarrGuess_Prev_507(end-2:end)],[],[],[],[],LB,UB,NONLCON,options);
+                    obj.UarrGuess_Prev_507 = Uarr_opt;
+                    
+                    TorqueB_C_ResB = Uarr_opt(1:3);
+
+
                 otherwise
                     
             end
@@ -172,6 +204,8 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
            obj.tArr(:,obj.SimCnt + 1) = obj.SimT;
            obj.OmegaRefA_BodyArr(:,obj.SimCnt + 1) = OmegaRefA_Body;
            obj.QuatRefA_BodyArr(:,obj.SimCnt + 1) = QuatRefA_Body;
+           obj.TorqueB_C_ResB_Prev = TorqueB_C_ResB;
+           obj.U_Prev = U;
 
            obj.SimCnt = obj.SimCnt + 1;
            obj.SimT = obj.SimCnt*obj.params.Ts;
@@ -181,10 +215,72 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
            if mod(obj.SimCnt,10) == 0 fprintf('%d\n',obj.SimCnt); end
 
         end        
-       
     end % public
 
     methods (Static)
+        % functions for 3D attitude control option 2 (basic nonlinear MPC)
+        % Define continous-time dynamics
+        function Xd = f_cont_MPC_Option2(X_MPC2,U_MPC2,params)
+            q_BA_B = X_MPC2(1:4); % q_BA_(B or A)
+            W_BA_B = X_MPC2(5:7);     % W_BA_B
+            q_dot = 0.5 * [
+	            q_BA_B(4), -q_BA_B(3), q_BA_B(2);
+	            q_BA_B(3), q_BA_B(4), -q_BA_B(1);
+	            -q_BA_B(2), q_BA_B(1), q_BA_B(4);
+	            -q_BA_B(1), -q_BA_B(2), -q_BA_B(3)
+	            ] * W_BA_B;
+
+            Xd = [q_dot;
+            params.Itot_inv_Body*(U_MPC2 - cross(W_BA_B,params.Itot_Body*W_BA_B))];            
+        end
+        % Define objective function
+        function J = obj_fun_MPC_Option2(params,Uarr,Xk_MPC2,Ukm1_MPC2,ell,QuatRefA_Body,OmegaRefA_Body,Q_err_quat_vec_BR_Body,Q_Delta_W_Body,R_Delta_U)
+            Uarr = reshape(Uarr,3,ell);
+
+            X_Arr = ODE_RK4(@SatelliteClass.f_cont_MPC_Option2,Xk_MPC2,ell,Uarr,params.Ts,params);
+            X_Arr = X_Arr(:,2:end);
+
+            % delta w error
+            OmegaBA_Body_Arr = X_Arr(5:7,:);
+            Delta_W_Body_kArr = OmegaBA_Body_Arr - OmegaRefA_Body;
+
+            % quaternion error
+            quat_BA_Body_kArr = X_Arr(1:4,:); % FB quat wrt FA
+            err_quat_BR_Body_kArr = zeros(4,ell);
+            for i = 1:ell
+                quat_BA_Body_k = quat_BA_Body_kArr(:,i);
+                O_BA_K = quat2dcm([quat_BA_Body_k(end);quat_BA_Body_k(1:3)]'); % [TODO: use my code and compare]
+                O_RefA_K = quat2dcm([QuatRefA_Body(end);QuatRefA_Body(1:3)]');
+                O_BR_K = O_BA_K*(O_RefA_K');
+    
+                if true % obtain thru DCM
+                    [err_quat_BR_Body_ScalerFirst] = dcm2quat(O_BR_K);
+                    err_quat_BR_Body = [err_quat_BR_Body_ScalerFirst(2:4)';err_quat_BR_Body_ScalerFirst(1)]; % convert to scaler last from Matlab
+                else % direct quaternion [TODO: use direct quat and compare!]
+                end
+                err_quat_BR_Body_kArr(:,i) = err_quat_BR_Body;
+
+            end
+
+            % Control rate
+            Delta_U_kArr = diff([Ukm1_MPC2 Uarr],1,2);
+
+            % Compute cost function
+            J = 0;
+            for i = 0:(ell-1)
+                J = J + err_quat_BR_Body_kArr(1:3,i+1)'*Q_err_quat_vec_BR_Body*err_quat_BR_Body_kArr(1:3,i+1) + ...
+                        Delta_W_Body_kArr(:,i+1)'*Q_Delta_W_Body*Delta_W_Body_kArr(:,i+1) + ...
+                        Delta_U_kArr(:,i+1)'*R_Delta_U*Delta_U_kArr(:,i+1);
+            end            
+        end
+
+        % Define constraint function
+        function [g,h] = constr_fun_MPC_Option2(Uarr,params)
+            % Note: g(Uarr) <=0, h(Uarr) = 0
+            g = [];            
+            h = [];
+        end
+
         function xdot = satellite_dynamics(t, x,U, planet, sat_params,TorqueB_C_ResB)
             % Compute the state's continous time-derivative
             % See claas definition for X and U definition
@@ -214,7 +310,8 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
 
             % Reaction wheel dynamics
             omega_reac = x(14:(13+sat_params.N_react));
-            external_torque = zeros(3,1); % Edit here for external torques [3;-2;1]*0.001;
+            external_torque = zeros(3,1); % Edit here for external torques 
+            % external_torque = [3;-2;1]*0.001;
             I_wdot = -cross(omega,sat_params.Itot_Body*omega) + external_torque;
             OmeReacDot = U(1:sat_params.N_react);
 
@@ -237,7 +334,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
                 end
             end
 
-            omega_dot = sat_params.Itot_Body\I_wdot;
+            omega_dot = sat_params.Itot_inv_Body*I_wdot;
             xdot = [r_dot; v_dot; q_dot; omega_dot;OmeReacDot];
         end
     end % static
