@@ -1,5 +1,6 @@
 %% Satellite dynamics 6-DOF simulation
 clc; clear; close all;
+addpath("JpHelp\");
 
 %% set up planet parameters
 planet = {};
@@ -8,7 +9,7 @@ planet.R = 6.63781e6; % m
 planet.G = 6.67430e-11; % m^3/kg/s^2
 
 %% Simulation parameters
-Tend = 1000; %[secs]
+Tend = 3000; %[secs]
 Ts = 10; % sampling period
 Nsim = Tend/Ts;
 
@@ -27,8 +28,8 @@ V0 = [0;v_orbit*cosd(i0);v_orbit*sind(i0)]; % pqr ??
 phi = 0; % rad angular positino about x
 theta = 0; % rad angular position about y
 psi = 0; % rad angular position about z
-quat_scalar_first = eul2quat([psi, theta, phi], 'ZYX'); % quaternion
-Q0 = [quat_scalar_first(2:4)'; quat_scalar_first(1)]; % convert to scalar last
+quat_scalar_first = eul2quat([psi, theta, phi], 'ZYX'); % quaternion in inertial frame FA
+Q0_A = [quat_scalar_first(2:4)'; quat_scalar_first(1)]; % convert to scalar last
 
 % W0: initial angular velocity of satellite body w.r.t. ECI frame, expressed in body frame
 W0 = [0.0; 0.0; 0.0];
@@ -50,29 +51,46 @@ sat_params.MassReactionWheel = 2; % mass of SINGLE reaction wheel, to be added t
 % 506 = 3D Attitude control option 1 
 % 507 = 3D Attitude control option 2
 % 508 = 3D Attitude control option 3
-sat_params.ControlScheme = 508; 
+sat_params.ControlScheme = 507; 
 
 % Initial reaction wheel speed
 W_React0arr = zeros(size(sat_params.gs_b_arr,2),1);
 
 sat_params.Name = 'Satellite1';
-Satellite1 = SatelliteClass(sat_params,R0,V0,Q0,W0,W_React0arr,planet);
+Satellite1 = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
 
 sat_params.Name = 'Satellite2';
-Satellite2 = SatelliteClass(sat_params,R0,V0,Q0,W0,W_React0arr,planet);
+Satellite2 = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
 %% Simulate 
+QuatRefA_A = Q0_A; % set initial quat refA
 
 for k = 0:(Nsim-1)
     SimT = k*Ts;
 
-    % set commands 
+    % set position commands 
     PosRef = zeros(3,1);
     VelRef = zeros(3,1);
-    QuatRefA_Body = [zeros(3,1);1]; QuatRefA_Body = zeros(4,1); QuatRefA_Body(1 + floor(mod(k,200)/50)) = 1; %QuatRefA_Body(1) = 1;% 
 
-    OmegaRefA_Body = zeros(3,1); % OmegaRefA_Body(1) = 1*pi/180*sin(2*pi/1000*SimT); OmegaRefA_Body(2) = 3*pi/180*cos(2*pi/1500*SimT); OmegaRefA_Body(3) = 0.5*pi/180*sin(2*pi/750*SimT);
+    % Set attitude commands    
+    if true % Cycle through various quaternions
+        QuatRefA_A = zeros(4,1); QuatRefA_A(1 + floor(mod(k,200)/50)) = 1; %QuatRefA_Body(1) = 1;% 
+    else % use a given profile
+        GetQuatProfile;
+    end
+    % QuatRefA_Body = [zeros(3,1);1]; 
 
-    Satellite1.Step(PosRef,VelRef,QuatRefA_Body,OmegaRefA_Body);
+    % Set attitude rate reference
+    if false % numerical differentiate QuatRefA_Body, followed by least-squares estimate of OmegaRefA_Body
+        if k == 0 QuatRefA_Body_Prev = QuatRefA_A;end
+        delta_QuatRefA_Body = QuatRefA_A - QuatRefA_Body_Prev;
+        QuatRefA_Body_Prev = QuatRefA_A;
+    else % Constant 
+        OmegaRefA_A = zeros(3,1); %OmegaRefA_A(1) = 1*pi/180*sin(2*pi/1000*SimT); OmegaRefA_A(2) = 3*pi/180*cos(2*pi/1500*SimT); OmegaRefA_A(3) = 0.5*pi/180*sin(2*pi/750*SimT);
+    end  
+
+    % OmegaRefA_A = [0.01;0;-0.02]; QuatRefA_Body = [zeros(3,1);1]; 
+
+    Satellite1.Step(PosRef,VelRef,QuatRefA_A,OmegaRefA_A);
 
     % Satellite2.Step(PosRef,VelRef,QuatRef,OmegaRefA_Body); % currently redundant as it is identical to satellite 1
 end
@@ -83,8 +101,8 @@ SatellitePlot = Satellite1; % select satellite to plot
 statesArr = SatellitePlot.statesArr(:,1:end-1);
 UarrStore = SatellitePlot.UarrStore;
 tArr = SatellitePlot.tArr;
-OmegaRefA_BodyArr = SatellitePlot.OmegaRefA_BodyArr;
-QuatRefA_BodyArr = SatellitePlot.QuatRefA_BodyArr;
+OmegaCmdA_BodyArr = SatellitePlot.OmegaCmdA_BodyArr;
+QuatRefA_A_Arr = SatellitePlot.QuatRefA_A_Arr;
 
 PlotAttitude1;
 return;
@@ -129,9 +147,9 @@ title('Angular Position');
 ylabel('(deg)');
 
 lm(kk) = subplot(nRows,nCols,kk); kk = kk + 1; hold on;
-plot(tArr,statesArr(11,:)*180/pi,'r',tArr,OmegaRefA_BodyArr(1,:)*180/pi,'r--', 'LineWidth', 2);
-plot(tArr,statesArr(12,:)*180/pi,'b',tArr,OmegaRefA_BodyArr(2,:)*180/pi,'b--', 'LineWidth', 2);
-plot(tArr,statesArr(13,:)*180/pi,'k',tArr,OmegaRefA_BodyArr(3,:)*180/pi,'k--', 'LineWidth', 2);
+plot(tArr,statesArr(11,:)*180/pi,'r',tArr,OmegaCmdA_BodyArr(1,:)*180/pi,'r--', 'LineWidth', 2);
+plot(tArr,statesArr(12,:)*180/pi,'b',tArr,OmegaCmdA_BodyArr(2,:)*180/pi,'b--', 'LineWidth', 2);
+plot(tArr,statesArr(13,:)*180/pi,'k',tArr,OmegaCmdA_BodyArr(3,:)*180/pi,'k--', 'LineWidth', 2);
 legend("$p$","$p_{ref}$", "$q$", "$q_{ref}$", "$r$", "$r_{ref}$", 'Interpreter', 'latex');
 title('Angular velocity');
 ylabel('(deg/s)');
