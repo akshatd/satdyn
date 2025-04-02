@@ -72,7 +72,7 @@ for k = 0:(Nsim-1)
     VelRef = zeros(3,1);
 
     % Set attitude commands    
-    if true % Cycle through various quaternions
+    if false % Cycle through various quaternions
         QuatRefA_A = zeros(4,1); QuatRefA_A(1 + floor(mod(k,200)/50)) = 1; %QuatRefA_Body(1) = 1;% 
     else % use a given profile
         GetQuatProfile;
@@ -80,10 +80,19 @@ for k = 0:(Nsim-1)
     % QuatRefA_Body = [zeros(3,1);1]; 
 
     % Set attitude rate reference
-    if false % numerical differentiate QuatRefA_Body, followed by least-squares estimate of OmegaRefA_Body
-        if k == 0 QuatRefA_Body_Prev = QuatRefA_A;end
-        delta_QuatRefA_Body = QuatRefA_A - QuatRefA_Body_Prev;
-        QuatRefA_Body_Prev = QuatRefA_A;
+    if true % numerical differentiate QuatRefA_Body, followed by least-squares estimate of OmegaRefA_Body
+        if k == 0 QuatRefA_A_Prev = QuatRefA_A;end
+        delta_QuatRefA_A = QuatRefA_A - QuatRefA_A_Prev;
+        Amat = Ts/2*[
+	            QuatRefA_A(4), -QuatRefA_A(3), QuatRefA_A(2);
+	            QuatRefA_A(3), QuatRefA_A(4), -QuatRefA_A(1);
+	            -QuatRefA_A(2), QuatRefA_A(1), QuatRefA_A(4);
+	            -QuatRefA_A(1), -QuatRefA_A(2), -QuatRefA_A(3)
+	            ];
+        OmegaRefA_R = (Amat'*Amat)\Amat'*delta_QuatRefA_A;
+        O_RefA_K = quat2dcm([QuatRefA_A(end);QuatRefA_A(1:3)]');
+        OmegaRefA_A = O_RefA_K'*OmegaRefA_R;
+        QuatRefA_A_Prev = QuatRefA_A;
     else % Constant 
         OmegaRefA_A = zeros(3,1); %OmegaRefA_A(1) = 1*pi/180*sin(2*pi/1000*SimT); OmegaRefA_A(2) = 3*pi/180*cos(2*pi/1500*SimT); OmegaRefA_A(3) = 0.5*pi/180*sin(2*pi/750*SimT);
     end  

@@ -39,7 +39,7 @@ else
 end
 
 %% Slew QuatRefA to QuatRefA_Body_Desired
-SlewRateLimitDegs = 0.5;
+SlewRateLimitDegs = 0.25;
 
 [qiR_scal,qiR_vec,RotVec_21,AngRad_i1] = InterpolateQuat_PhysicalAngularRateLimit(...
     QuatRefA_A(4),QuatRefA_A(1:3),QuatRefA_A_Desired_Scal,QuatRefA_A_Desired_Vec,SlewRateLimitDegs*pi/180*Ts);

@@ -112,6 +112,8 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             % expressed in body frame. Set to empty if doing proper
             % actuator control
 
+            W_mag_rads_limit = 1*pi/180;
+
             if obj.SimCnt == 0
                 obj.TorqueB_C_ResB_Prev = zeros(3,1);
                 obj.U_Prev = zeros(obj.params.N_react,1);
@@ -177,7 +179,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
                     R_Delta_U  = 0.1*eye(3);
 
                     obj_ = @(Uarr) SatelliteClass.obj_fun_MPC_Option2(obj.params,Uarr,Xk_MPC2,obj.TorqueB_C_ResB_Prev,ell,xRefArr,Q_err_quat_vec_BR_Body,Q_Delta_W_Body,R_Delta_U);
-                    NONLCON = @(Uarr) SatelliteClass.constr_fun_MPC_Option2(Uarr,obj.params);
+                    NONLCON = @(Uarr) SatelliteClass.constr_fun_MPC_Option2(Uarr,Xk_MPC2,ell,W_mag_rads_limit,obj.params);
                     % fmincon(J,W0,A1,B1,A2,B2,LB_W,UB_W,NONLCON), min(W) J(W) s.t. A1*W  <= B1, A2*W  = B2
                     % LB_W <= W <= UB_W. [g,h] = NONLCON(W) where g(W) <= 0, h(W) = 0 and 
                     if obj.SimCnt ==0 obj.UarrGuess_Prev_507 = ones(3*ell,1)*0.01;end
@@ -191,14 +193,14 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
 
                 case 508 % 3D attitude control option 3 (P-outer, W-inner)
                     error('Not complete\n')
-                    Kp = 0.1; Wcmd_mag_rads_limit = 1*pi/180;
+                    Kp = 0.1; 
 
                     % Compute W_BA_Cmd_Body
                     delta_WrefA_Body = -Kp*SignJP(err_quat_scaler_BR_Body)*err_quat_vec_BR_Body;
                     W_BA_Cmd_Body = delta_WrefA_Body + OmegaRefA_Body;
                     Wcmd_mag_rads = norm(W_BA_Cmd_Body);
-                    if Wcmd_mag_rads > Wcmd_mag_rads_limit
-                        W_BA_Cmd_Body = W_BA_Cmd_Body*Wcmd_mag_rads_limit/Wcmd_mag_rads;
+                    if Wcmd_mag_rads > W_mag_rads_limit
+                        W_BA_Cmd_Body = W_BA_Cmd_Body*W_mag_rads_limit/Wcmd_mag_rads;
                     end
                     if obj.SimCnt == 0 obj.W_BA_Cmd_Body_Prev_508 = W_BA_Cmd_Body;end
 
@@ -327,9 +329,17 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
         end
 
         % Define constraint function
-        function [g,h] = constr_fun_MPC_Option2(Uarr,params)
+        function [g,h] = constr_fun_MPC_Option2(Uarr,Xk_MPC2,ell,W_mag_rads_limit,params)
             % Note: g(Uarr) <=0, h(Uarr) = 0
-            g = [];            
+            Uarr = reshape(Uarr,3,ell);
+
+            X_Arr = ODE_RK4(@SatelliteClass.f_cont_MPC_Option2,Xk_MPC2,ell,Uarr,params.Ts,params);
+            X_Arr = X_Arr(:,2:end);     
+
+            pRadsArr= X_Arr(5,:); qRadsArr=  X_Arr(6,:); rRadsArr=  X_Arr(7,:);
+            w_BA_B_RadsMagArr = sqrt(pRadsArr.^2 + qRadsArr.^2 + rRadsArr.^2);
+
+            g = w_BA_B_RadsMagArr -W_mag_rads_limit;            
             h = [];
         end
 
