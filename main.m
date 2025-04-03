@@ -9,8 +9,8 @@ planet.R = 6.63781e6; % m
 planet.G = 6.67430e-11; % m^3/kg/s^2
 
 %% Simulation parameters
-Tend = 4000; %[secs]
-Ts = 5; % sampling period
+Tend = 1002; %[secs]
+Ts = 3; % sampling period
 Nsim = Tend/Ts;
 
 h0 = 500e3; % initial satellite height above ground [m]
@@ -50,22 +50,37 @@ sat_params.I_ws = 0.5*0.137*(23/1000)^2 ;%Estimated from NanoAvio 0.5mr2 10;  % 
 sat_params.gs_b_arr = [2 0 1; -2 0 1; 0 2 1; 0 -2 1]'/sqrt(5); % NanoAvio 4RW0 configuration
 sat_params.MassReactionWheel = 0.137; %2; % mass of SINGLE reaction wheel, to be added to satellite mass [Kg]
 
-% -1 = do nothing%
-% 505 = Attitude rate control option 1
-% 506 = 3D Attitude control option 1 
-% 507 = 3D Attitude control option 2
-% 508 = 3D Attitude control option 3
-% 509 = 3D Attitude control option 4
-sat_params.ControlScheme = 509; 
 
 % Initial reaction wheel speed
 W_React0arr = zeros(size(sat_params.gs_b_arr,2),1);
 
-sat_params.Name = 'Satellite1';
-Satellite1 = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
+% -1 = do nothing%
+% 505 = Attitude rate control option 1
+% 506 = 3D attitude control option 1 using PID
+% 507 = 3D attitude control option 2 using basic nonlinear MPC
+% 508 = 3D attitude control option 3 (P-outer, W-inner)
+% 509 = 3D attitude control option 4 using reaction wheels nonlinear MPC
 
-sat_params.Name = 'Satellite2';
-Satellite2 = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
+
+sat_params.ControlScheme = 506;  sat_params.Name = 'PID';
+Satellite_PID = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
+
+sat_params.ControlScheme = 509;  sat_params.Name = 'NMPC1'; 
+sat_params.q_err_quat_vec_BR_Body = 20;
+sat_params.q_Delta_W_Body = 3000;
+sat_params.r_Delta_U = 0.00;
+sat_params.r_U = 0.0075;
+Satellite_NMPC1 = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
+
+sat_params.ControlScheme = 509;  sat_params.Name = 'NMPC2'; 
+sat_params.q_err_quat_vec_BR_Body = 20;
+sat_params.q_Delta_W_Body = 3000;
+sat_params.r_Delta_U = 0.001;
+sat_params.r_U = 0.002;
+Satellite_NMPC2 = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
+
+SatelliteArr = [Satellite_PID,Satellite_NMPC1];%,Satellite_NMPC2];
+nSat = length(SatelliteArr);
 %% Simulate 
 QuatRefA_A = Q0_A; % set initial quat refA
 
@@ -102,23 +117,27 @@ for k = 0:(Nsim-1)
         OmegaRefA_A = zeros(3,1); %OmegaRefA_A(1) = 1*pi/180*sin(2*pi/1000*SimT); OmegaRefA_A(2) = 3*pi/180*cos(2*pi/1500*SimT); OmegaRefA_A(3) = 0.5*pi/180*sin(2*pi/750*SimT);
     end  
 
-    % OmegaRefA_A = [0.00;0;-0.00]; QuatRefA_A = [zeros(3,1);1]; 
+    % OmegaRefA_A = [0.00;0;-0.00]; QuatRefA_A = [zeros(3,1);1]; % do nothing
 
-    Satellite1.Step(PosRef,VelRef,QuatRefA_A,OmegaRefA_A);
-
-    % Satellite2.Step(PosRef,VelRef,QuatRef,OmegaRefA_Body); % currently redundant as it is identical to satellite 1
+    for s = 1:nSat
+        SatelliteArr(s).Step(PosRef,VelRef,QuatRefA_A,OmegaRefA_A);
+    end
+   
 end
 
 %% Plot results
 figN = 1;
-SatellitePlot = Satellite1; % select satellite to plot
+SatellitePlot = Satellite_PID; % select satellite to plot
 statesArr = SatellitePlot.statesArr(:,1:end-1);
 UarrStore = SatellitePlot.UarrStore;
 tArr = SatellitePlot.tArr;
 OmegaCmdA_BodyArr = SatellitePlot.OmegaCmdA_BodyArr;
 QuatRefA_A_Arr = SatellitePlot.QuatRefA_A_Arr;
+Err_BR_AngRadArr = SatellitePlot.Err_BR_AngRadArr;
 
 PlotAttitude1;
+
+PlotAttitude2;
 return;
 
 % plot earth and satellite in 3D

@@ -7,6 +7,7 @@ euls = quat2eul([quats(:, 4), quats(:, 1:3)], 'ZYX'); % convert to scalar first 
 
 pRadsArr= statesArr(11,:); qRadsArr= statesArr(12,:); rRadsArr= statesArr(13,:);
 w_BA_B_RadsMagArr = sqrt(pRadsArr.^2 + qRadsArr.^2 + rRadsArr.^2);
+w_CmdA_B_RadsMagArr = sqrt(OmegaCmdA_BodyArr(1,:).^2 + OmegaCmdA_BodyArr(2,:).^2 + OmegaCmdA_BodyArr(3,:).^2);
 
 % Angular velocity
 lm(kk) = subplot(nRows,nCols,kk); kk = kk + 1; hold on;
@@ -23,6 +24,7 @@ ylabel('r (deg/s)');
 
 lm(kk) = subplot(nRows,nCols,kk); kk = kk + 1; hold on;
 plot(tArr,w_BA_B_RadsMagArr*180/pi,RspCol, 'LineWidth', mLineWidth);
+plot(tArr,w_CmdA_B_RadsMagArr*180/pi,CmdCol, 'LineWidth', mLineWidth);
 ylabel('$w_{BA}^B$ mag (deg/s)','Interpreter','latex');
 
 
@@ -42,6 +44,10 @@ ylabel('q3');
 lm(kk) = subplot(nRows,nCols,kk); kk = kk + 1; hold on;
 plot(tArr,quats(:,4),RspCol,tArr,QuatRefA_A_Arr(4,:),CmdCol, 'LineWidth', mLineWidth);
 ylabel('q4');
+
+lm(kk) = subplot(nRows,nCols,kk); kk = kk + 1; hold on;
+plot(tArr,Err_BR_AngRadArr*180/pi,RspCol, 'LineWidth', mLineWidth);
+ylabel('Angle error [deg]');
 
 lm(kk) = subplot(nRows,nCols,kk); kk = kk + 1; hold on;
 plot(tArr,euls*180/pi, 'LineWidth', mLineWidth)

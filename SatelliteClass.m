@@ -18,6 +18,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
         SimT = 0;   % simulation time = SimCnt*Ts
         UarrStore 
         tArr
+        Err_BR_AngRadArr    % Store Error angle [rad]
 
         TorqueB_C_ResB_Prev
         U_Prev
@@ -26,6 +27,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
         QuatRefA_A_Arr   % store QuatRefA_A
 
         OmegaRefA_Body_Prev = zeros(3,1);
+        OmegaRefA_A_Prev = zeros(3,1);
 
         Body_int_506 = zeros(3,1); % integrator vector state for option 506
         Delta_W0_Body % store initial delta W
@@ -35,6 +37,9 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
         W_BA_Cmd_Body_Prev_508  % previous W_BA_Cmd_Body
 
         UarrGuess_Prev_509  % previous iteration's optimal guess
+
+        tStart_tic
+        TotalRunTime_s
 
     end
     
@@ -85,6 +90,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             obj.tArr = zeros(1,params.Nsim);
             obj.OmegaCmdA_BodyArr = zeros(3,params.Nsim);
             obj.QuatRefA_A_Arr = zeros(4,params.Nsim);
+            obj.Err_BR_AngRadArr = zeros(1,params.Nsim);
 
             % Reaction wheel
             obj.params.N_react = size(obj.params.gs_b_arr,2);
@@ -100,6 +106,8 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
 
             obj.params.Itot_Body = obj.params.J_SatBody_C; % NOTE!! Assumes J_SatBody_C includes ALL N_react reaction wheel's contribution too for simplicity
             obj.params.Itot_inv_Body = inv(obj.params.Itot_Body);
+
+            obj.tStart_tic = tic;
         end
 
         function [U,TorqueB_C_ResB] = GetControls(obj,PosRef,VelRef,QuatRefA_A,OmegaRefA_A)
@@ -116,7 +124,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             % expressed in body frame. Set to empty if doing proper
             % actuator control
 
-            W_mag_rads_limit = 1*pi/180; Umag_rads2_limit = 88.3087;% NanoAvio 1*pi/180;
+            W_mag_rads_limit = 1.5*pi/180; Umag_rads2_limit = 88.3087;% NanoAvio 1*pi/180;
 
             if obj.SimCnt == 0
                 obj.TorqueB_C_ResB_Prev = zeros(3,1);
@@ -134,6 +142,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             % frame            
             OmegaBA_Body = Xk(11:13);
             OmegeRefA_Dot_Body = (OmegaRefA_Body - obj.OmegaRefA_Body_Prev)/obj.params.Ts;
+            % OmegeRefA_Dot_Body = OmegeRefA_Dot_Body*0;
             J_BC_OmegaBA_Body = obj.params.Itot_Body*OmegaBA_Body;
             Delta_W_Body = OmegaBA_Body - O_BA_K*OmegaRefA_A; % TODO: use quat to change perspective
             if obj.SimCnt == 0 obj.Delta_W0_Body = Delta_W_Body; end;
@@ -148,10 +157,13 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             else % direct quaternion [TODO: use direct quat and compare!]
             end
             err_quat_scaler_BR_Body = err_quat_BR_Body(end); err_quat_vec_BR_Body = err_quat_BR_Body(1:3);
+            [Err_BR_RotVec_Body,Err_BR_AngRad] = Quat2RotVectAngle(err_quat_scaler_BR_Body,err_quat_vec_BR_Body);
 
             % Predict ahead the ref quat using OmegaRef
+            if obj.SimCnt == 0 obj.OmegaRefA_A_Prev = OmegaRefA_A;end;
+            OmegaRefA_Dot_A = (OmegaRefA_A - obj.OmegaRefA_A_Prev)/obj.params.Ts;
             ell = 10; % MPC horizon
-            xRefArr = ODE_RK4(@(X,U,params) SatelliteClass.fRef_cont(X),[QuatRefA_A;O_RefA_K*OmegaRefA_A],ell,zeros(1,ell),obj.params.Ts,[]);
+            xRefArr = ODE_RK4(@(X,U,params) SatelliteClass.fRef_cont(X,OmegaRefA_Dot_A),[QuatRefA_A;O_RefA_K*OmegaRefA_A],ell,zeros(1,ell),obj.params.Ts,[]);
             xRefArr = xRefArr(:,2:end); % Xref = [QuatRefA_A;OmegaRefA_Ref] propagated with constant OmegaRefA_Ref
 
             % Reaction wheel matrices
@@ -244,10 +256,10 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
                     options = optimoptions('fmincon','Display','iter','MaxIterations',50,'Algorithm','active-set');
                     Xk_MPC4 = [quat_BA_Body_k;OmegaBA_Body;omega_reac];
                     
-                    Q_err_quat_vec_BR_Body = 1.5*eye(3);
-                    Q_Delta_W_Body = 300.0*eye(3);
-                    R_Delta_U  = 0.01*eye(obj.params.N_react);
-                    R_U = 0.005*eye(obj.params.N_react);
+                    Q_err_quat_vec_BR_Body =obj.params.q_err_quat_vec_BR_Body*eye(3);
+                    Q_Delta_W_Body = obj.params.q_Delta_W_Body*eye(3);
+                    R_Delta_U  = obj.params.r_Delta_U*eye(obj.params.N_react);
+                    R_U = obj.params.r_U*eye(obj.params.N_react);
 
                     if obj.SimCnt ==0 obj.UarrGuess_Prev_509 = ones(obj.params.N_react*ell,1)*0.01;end
 
@@ -271,7 +283,9 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             end
 
             obj.OmegaRefA_Body_Prev = OmegaRefA_Body;
+            obj.OmegaRefA_A_Prev = OmegaRefA_A;
             obj.OmegaCmdA_BodyArr(:,obj.SimCnt + 1) = OmegaCmdA_Body;
+            obj.Err_BR_AngRadArr(:,obj.SimCnt + 1) = Err_BR_AngRad;
         end
 
         function Step(obj,PosRef,VelRef,QuatRefA_A,OmegaRefA_A)
@@ -303,6 +317,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
            obj.SimT = obj.SimCnt*obj.params.Ts;
            
 
+           obj.TotalRunTime_s = toc(obj.tStart_tic); 
            
            if mod(obj.SimCnt,10) == 0 fprintf('%d\n',obj.SimCnt); end
 
@@ -311,11 +326,12 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
 
     methods (Static)
         
-        function Xd = fRef_cont(Xref)
+        function Xd = fRef_cont(Xref,OmegaRefA_Dot_A)
             % Xref = [QuatRefA_A;OmegaRefA_Ref]
             % just calculate quat dot, assuming OmegaRefA_Ref dot = 0
             QuatRefA_A = Xref(1:4);
             OmegaRefA_Ref = Xref(5:7);
+            O_RefA = quat2dcm([QuatRefA_A(end);QuatRefA_A(1:3)]');
 
             q_dot = 0.5 * [
 	            QuatRefA_A(4), -QuatRefA_A(3), QuatRefA_A(2);
@@ -323,7 +339,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
 	            -QuatRefA_A(2), QuatRefA_A(1), QuatRefA_A(4);
 	            -QuatRefA_A(1), -QuatRefA_A(2), -QuatRefA_A(3)
 	            ] * OmegaRefA_Ref;
-            Xd = [q_dot;zeros(3,1)];
+            Xd = [q_dot;O_RefA*OmegaRefA_Dot_A];
         end
 
         % Start ---------- 3D attitude control option 4 (reaction wheel Nonlin MPC -----------------
