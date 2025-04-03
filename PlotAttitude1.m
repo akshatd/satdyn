@@ -54,9 +54,10 @@ lm(kk) = subplot(nRows,nCols,kk); kk = kk + 1; hold on;
 leg = [];
 title('Reaction wheel angular velocity');
 for r = 1:SatellitePlot.params.N_react
-    leg(r) = plot(tArr,statesArr(13+r,:)*180/pi, 'LineWidth', mLineWidth,'DisplayName',num2str(r));   
+    leg(r) = plot(tArr,statesArr(13+r,:)/(2*pi)*60, 'LineWidth', mLineWidth,'DisplayName',num2str(r));   
 end
-ylabel('(deg/s)');
+% yline(6500,'r--'); yline(-6500,'r--'); % NanoAvio Max RPM
+ylabel('(RPM)');
 xlabel('Time (s)');
 legend(leg, 'Interpreter', 'latex');
 
@@ -64,9 +65,12 @@ lm(kk) = subplot(nRows,nCols,kk); kk = kk + 1; hold on;
 leg = [];
 title('Reaction wheel angular acceleration');
 for r = 1:SatellitePlot.params.N_react
-    leg(r) = plot(tArr,UarrStore(r,:)*180/pi, 'LineWidth', mLineWidth,'DisplayName',num2str(r));   
+    leg(r) = plot(tArr,UarrStore(r,:)/(2*pi)*60^2, 'LineWidth', mLineWidth,'DisplayName',num2str(r));   
 end
-ylabel('(deg/s2)');
+MaxTorque = 3.2/1000; % NanoAvio Max torque
+MaxReacWheelAngAccRads2 = MaxTorque/sat_params.I_ws;
+% yline(MaxReacWheelAngAccRads2/(2*pi)*60^2,'r--'); yline(-MaxReacWheelAngAccRads2/(2*pi)*60^2,'r--'); 
+ylabel('(RPM2)');
 xlabel('Time (s)');
 legend(leg, 'Interpreter', 'latex');
 

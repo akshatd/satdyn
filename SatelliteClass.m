@@ -116,7 +116,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             % expressed in body frame. Set to empty if doing proper
             % actuator control
 
-            W_mag_rads_limit = 1*pi/180; Umag_rads2_limit = 1*pi/180;
+            W_mag_rads_limit = 1*pi/180; Umag_rads2_limit = 88.3087;% NanoAvio 1*pi/180;
 
             if obj.SimCnt == 0
                 obj.TorqueB_C_ResB_Prev = zeros(3,1);
@@ -163,22 +163,27 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             U = zeros(obj.params.N_react,1);
             TorqueB_C_ResB = [];
 
+            % General control tuning
+            Tau_timeConstant_Secs = 30; Zeta = 0.9;
+
             switch obj.params.ControlScheme
                 case 505 % atittude-rate control option 1 using P control                    
                     TorqueB_C_ResB = SatelliteClass.GetAttitudeRateControl_Option1_Pctrl(OmegaRefA_Body,...
                         OmegeRefA_Dot_Body,J_BC_OmegaBA_Body,OmegaBA_Body,obj.params);
 
                     Tau = TorqueB_C_ResB + TorqueReacFF_ResB;
-                    U = -obj.params.gs_b_arr_MinNorm *Tau;
+                    U = -obj.params.gs_b_arr_MinNorm *Tau/obj.params.I_ws;
                     U(U > Umag_rads2_limit) = Umag_rads2_limit;
                     U(U < -Umag_rads2_limit) = -Umag_rads2_limit; %if norm(U) > Umag_rads2_limit U = U*Umag_rads2_limit/norm(U);end
                     
                     TorqueB_C_ResB = [];
-
+                    
                     OmegaCmdA_Body = OmegaRefA_Body;
                 case 506 % 3D attitude control option 1 using PID
                     % compute the integral Z
-                    Kp = 0.05; Ki = 0.00; Kd = 1.0;
+                    Kd = 2*obj.params.J_SatBody_C_Mean/Tau_timeConstant_Secs;
+                    Kp = (Kd/Zeta)^2/2/obj.params.J_SatBody_C_Mean;
+                    Ki = 0.00; %Kp = 0.05; Kd = 1.0;
                     obj.Body_int_506 = obj.Body_int_506 + SignJP(err_quat_scaler_BR_Body)*Kp*err_quat_vec_BR_Body*obj.params.Ts;
                     Z_body = obj.Body_int_506 + obj.params.Itot_Body*(Delta_W_Body - obj.Delta_W0_Body); 
 
@@ -186,7 +191,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
                                     -Kd*Delta_W_Body - Kp*SignJP(err_quat_scaler_BR_Body) *err_quat_vec_BR_Body - Kd*Ki*Z_body;
 
                     Tau = TorqueB_C_ResB + TorqueReacFF_ResB;
-                    U = -obj.params.gs_b_arr_MinNorm *Tau;
+                    U = -obj.params.gs_b_arr_MinNorm *Tau/obj.params.I_ws;
                     U(U > Umag_rads2_limit) = Umag_rads2_limit;
                     U(U < -Umag_rads2_limit) = -Umag_rads2_limit; %if norm(U) > Umag_rads2_limit U = U*Umag_rads2_limit/norm(U);end
                     
@@ -236,13 +241,13 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
 
                     obj.W_BA_Cmd_Body_Prev_508 = W_BA_Cmd_Body;
                 case 509 % 3D attitude control option 4 using reaction wheels nonlinear MPC
-                    options = optimoptions('fmincon','Display','iter','MaxIterations',50,'Algorithm','sqp');
+                    options = optimoptions('fmincon','Display','iter','MaxIterations',50,'Algorithm','active-set');
                     Xk_MPC4 = [quat_BA_Body_k;OmegaBA_Body;omega_reac];
                     
-                    Q_err_quat_vec_BR_Body = 0.1*eye(3);
-                    Q_Delta_W_Body = 0.5*eye(3);
-                    R_Delta_U  = 0.1*eye(obj.params.N_react);
-                    R_U = 0.1*eye(obj.params.N_react);
+                    Q_err_quat_vec_BR_Body = 1.5*eye(3);
+                    Q_Delta_W_Body = 300.0*eye(3);
+                    R_Delta_U  = 0.01*eye(obj.params.N_react);
+                    R_U = 0.005*eye(obj.params.N_react);
 
                     if obj.SimCnt ==0 obj.UarrGuess_Prev_509 = ones(obj.params.N_react*ell,1)*0.01;end
 
@@ -488,7 +493,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             % resolved in satellite BODY frame
             % Note that the command is OmegaCmdA
             Delta_W_Body = OmegaBA_Body - OmegaCmdA_Body;
-            Pgain_Matrix = diag([1.0;1.0;1.0]);
+            Pgain_Matrix = diag([1.0;1.0;1.0])*0.000001;
             TorqueB_C_ResB = cross(OmegaCmdA_Body,J_BC_OmegaBA_Body) + params.Itot_Body*OmegeCmdA_Dot_Body ...
                             -Pgain_Matrix*Delta_W_Body;
         end

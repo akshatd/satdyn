@@ -9,8 +9,8 @@ planet.R = 6.63781e6; % m
 planet.G = 6.67430e-11; % m^3/kg/s^2
 
 %% Simulation parameters
-Tend = 3000; %[secs]
-Ts = 10; % sampling period
+Tend = 4000; %[secs]
+Ts = 5; % sampling period
 Nsim = Tend/Ts;
 
 h0 = 500e3; % initial satellite height above ground [m]
@@ -25,7 +25,7 @@ v_orbit = sqrt(planet.G * planet.M / norm(R0));
 V0 = [0;v_orbit*cosd(i0);v_orbit*sind(i0)]; % pqr ??
 
 % Q0: initial quaternion (Scaler-last) representing rotation of satellite body frame w.r.t. ECI frame
-phi = 0; % rad angular positino about x
+phi = 0*pi/180; % rad angular positino about x
 theta = 0; % rad angular position about y
 psi = 0; % rad angular position about z
 quat_scalar_first = eul2quat([psi, theta, phi], 'ZYX'); % quaternion in inertial frame FA
@@ -39,13 +39,16 @@ sat_params = {};
 sat_params.Nsim = Nsim;
 sat_params.Ts = Ts;
 
-sat_params.m = 8; % mass (exclude reaction wheels) [kg]
-sat_params.J_SatBody_C = diag([100;70;50]); % TO SET! [kgm2] Inertia matrix of satellite body (exclude reaction wheels), wrt satellite's center of mass, resolved in body frame
+sat_params.m = 9.755842;% Akshat 8; % mass (exclude reaction wheels) [kg]
+sat_params.J_SatBody_C = [1.19*10^8 1.33*10^7 1.87*10^5;
+                          1.33*10^7 8.79*10^7 -7.59*10^5;
+                          1.87*10^5 -7.59*10^5 1.19*10^8]*10^-9; % Akshat diag([100;70;50])[kgm2] Inertia matrix of satellite body (exclude reaction wheels), wrt satellite's center of mass, resolved in body frame
+sat_params.J_SatBody_C_Mean = mean(diag(sat_params.J_SatBody_C));
 
-sat_params.I_ws = 10;  % TO SET! spin axis moments of inertia (wrt wheel's center-of-mass, in principal wheel frame) [kgm2]
-sat_params.gs_b_arr = [1 0 0;0 1 0; 0 0 1;1/sqrt(3) 1/sqrt(3) 1/sqrt(3);]'; % unit spin axis in satellite body's frame Fb [column vector x N_react] matrix
-sat_params.gs_b_arr = [2 0 1; -2 0 1; 0 2 1; 0 -2 1]'/sqrt(5);
-sat_params.MassReactionWheel = 2; % mass of SINGLE reaction wheel, to be added to satellite mass [Kg]
+sat_params.I_ws = 0.5*0.137*(23/1000)^2 ;%Estimated from NanoAvio 0.5mr2 10;  % spin axis moments of inertia (wrt wheel's center-of-mass, in principal wheel frame) [kgm2]
+% sat_params.gs_b_arr = [1 0 0;0 1 0; 0 0 1;1/sqrt(3) 1/sqrt(3) 1/sqrt(3);]'; % unit spin axis in satellite body's frame Fb [column vector x N_react] matrix
+sat_params.gs_b_arr = [2 0 1; -2 0 1; 0 2 1; 0 -2 1]'/sqrt(5); % NanoAvio 4RW0 configuration
+sat_params.MassReactionWheel = 0.137; %2; % mass of SINGLE reaction wheel, to be added to satellite mass [Kg]
 
 % -1 = do nothing%
 % 505 = Attitude rate control option 1
@@ -99,7 +102,7 @@ for k = 0:(Nsim-1)
         OmegaRefA_A = zeros(3,1); %OmegaRefA_A(1) = 1*pi/180*sin(2*pi/1000*SimT); OmegaRefA_A(2) = 3*pi/180*cos(2*pi/1500*SimT); OmegaRefA_A(3) = 0.5*pi/180*sin(2*pi/750*SimT);
     end  
 
-    % OmegaRefA_A = [0.01;0;-0.02]; QuatRefA_Body = [zeros(3,1);1]; 
+    % OmegaRefA_A = [0.00;0;-0.00]; QuatRefA_A = [zeros(3,1);1]; 
 
     Satellite1.Step(PosRef,VelRef,QuatRefA_A,OmegaRefA_A);
 
