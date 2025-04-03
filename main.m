@@ -44,6 +44,7 @@ sat_params.J_SatBody_C = diag([100;70;50]); % TO SET! [kgm2] Inertia matrix of s
 
 sat_params.I_ws = 10;  % TO SET! spin axis moments of inertia (wrt wheel's center-of-mass, in principal wheel frame) [kgm2]
 sat_params.gs_b_arr = [1 0 0;0 1 0; 0 0 1;1/sqrt(3) 1/sqrt(3) 1/sqrt(3);]'; % unit spin axis in satellite body's frame Fb [column vector x N_react] matrix
+sat_params.gs_b_arr = [2 0 1; -2 0 1; 0 2 1; 0 -2 1]'/sqrt(5);
 sat_params.MassReactionWheel = 2; % mass of SINGLE reaction wheel, to be added to satellite mass [Kg]
 
 % -1 = do nothing%
@@ -51,7 +52,8 @@ sat_params.MassReactionWheel = 2; % mass of SINGLE reaction wheel, to be added t
 % 506 = 3D Attitude control option 1 
 % 507 = 3D Attitude control option 2
 % 508 = 3D Attitude control option 3
-sat_params.ControlScheme = 507; 
+% 509 = 3D Attitude control option 4
+sat_params.ControlScheme = 509; 
 
 % Initial reaction wheel speed
 W_React0arr = zeros(size(sat_params.gs_b_arr,2),1);
