@@ -420,7 +420,8 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
                         Delta_W_Body_kArr(:,i+1)'*Q_Delta_W_Body*Delta_W_Body_kArr(:,i+1) + ...
                         Delta_U_kArr(:,i+1)'*R_Delta_U*Delta_U_kArr(:,i+1) + ...
                         Uarr(:,i+1)'*R_U*Uarr(:,i+1) + ...
-                        omega_reac_Arr(:,i+1)'*R_OmegaReac*omega_reac_Arr(:,i+1);
+                        omega_reac_Arr(:,i+1)'*R_OmegaReac*omega_reac_Arr(:,i+1) + ...
+                        params.r_sparse*norm(Uarr(:,i+1),1);
             end            
 
             J = J + Energy2Reac_Arr*Renergy*Energy2Reac_Arr';
@@ -431,7 +432,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             % Note: g(Uarr) <=0, h(Uarr) = 0
             Uarr = reshape(Uarr,params.N_react,ell);
 
-            omega_reac_limit = 100*2*pi/60;
+            omega_reac_limit = 200*2*pi/60;
 
             X_Arr = ODE_RK4(@SatelliteClass.f_cont_MPC_Option4,[Xk_MPC4;Energy2React_Total_J],ell,Uarr,params.Ts,params);
             X_Arr = X_Arr(:,2:end);    
@@ -444,8 +445,8 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
 
             g1 = w_BA_B_RadsMagArr -W_mag_rads_limit;  
 
-            g2 = omega_reac_Arr(end,:) - omega_reac_limit;
-            g3 = -omega_reac_Arr(end,:) - omega_reac_limit;
+            g2 = omega_reac_Arr(1,:) - omega_reac_limit;
+            g3 = -omega_reac_Arr(1,:) - omega_reac_limit;
 
             g = [g1;g2;g3];
             h = [];

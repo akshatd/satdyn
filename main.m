@@ -9,7 +9,7 @@ planet.R = 6.63781e6; % m
 planet.G = 6.67430e-11; % m^3/kg/s^2
 
 %% Simulation parameters
-Tend = 100; %[secs]
+Tend = 3000; %[secs]
 Ts = 3; % sampling period
 Nsim = floor(Tend/Ts);
 
@@ -48,7 +48,7 @@ sat_params.J_SatBody_C_Mean = mean(diag(sat_params.J_SatBody_C));
 sat_params.I_ws = 0.5*0.137*(23/1000)^2 ;%Estimated from NanoAvio 0.5mr2 10;  % spin axis moments of inertia (wrt wheel's center-of-mass, in principal wheel frame) [kgm2]
 % sat_params.gs_b_arr = [1 0 0;0 1 0; 0 0 1;1/sqrt(3) 1/sqrt(3) 1/sqrt(3);]'; % unit spin axis in satellite body's frame Fb [column vector x N_react] matrix
 sat_params.gs_b_arr = [2 0 1; -2 0 1; 0 2 1; 0 -2 1]'/sqrt(5); % NanoAvio 4RW0 configuration
-sat_params.gs_b_arr = [1 0 0;-1 0 0; 0 1 0; 0 -1 0; 0 0 1; 0 0 -1]'; % 6 configuration
+% sat_params.gs_b_arr = [1 0 0;-1 0 0; 0 1 0; 0 -1 0; 0 0 1; 0 0 -1]'; % 6 configuration
 sat_params.MassReactionWheel = 0.137; %2; % mass of SINGLE reaction wheel, to be added to satellite mass [Kg]
 
 
@@ -70,8 +70,9 @@ sat_params.ControlScheme = 509;  sat_params.Name = 'NMPC1';
 sat_params.q_err_quat_vec_BR_Body = 20;
 sat_params.q_Delta_W_Body = 500;
 sat_params.r_Delta_U = 0.00;
-sat_params.r_U = 0.01;
+sat_params.r_U = 0.0075;
 sat_params.Renergy = 0;
+sat_params.r_sparse = 0.0;
 Satellite_NMPC1 = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
 
 sat_params.ControlScheme = 509;  sat_params.Name = 'NMPC2'; 
