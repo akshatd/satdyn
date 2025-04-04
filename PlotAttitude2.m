@@ -6,7 +6,7 @@ for s = 1:nSat
      kk = 1;
     if s == 1
         figure(figN); figN = figN + 1; ha = [];
-        nRows = 2; nCols = 2;
+        nRows = 2; nCols = 3;
         RspCol = 'b'; CmdCol = 'r--'; mLineWidth = 1.5;
 
         tcl = tiledlayout(nRows,nCols,'TileSpacing','tight','Padding','tight'); % "loose", "compact", "tight" or "none"
@@ -29,6 +29,13 @@ for s = 1:nSat
     pRadsArr= statesArr(11,:); qRadsArr= statesArr(12,:); rRadsArr= statesArr(13,:);
     w_BA_B_RadsMagArr = sqrt(pRadsArr.^2 + qRadsArr.^2 + rRadsArr.^2);
     w_CmdA_B_RadsMagArr = sqrt(OmegaCmdA_BodyArr(1,:).^2 + OmegaCmdA_BodyArr(2,:).^2 + OmegaCmdA_BodyArr(3,:).^2);
+
+    omega_reac = SatellitePlot.statesArr(13+(1:SatellitePlot.params.N_react),2:end); %statesArr(,:);
+    Power_reac = SatellitePlot.params.I_ws*omega_reac.*UarrStore;
+    Energy2Reac_Total_J_Arr = cumtrapz(sum(Power_reac*Ts,1));
+
+    RMS_TrackingError_AngRad = sqrt(sum(Err_BR_AngRadArr.^2)/Nsim);
+    fprintf('%s Tracking RMS angle error [deg] %f Final enery [J] %f Total compute time [s] %f\n',SatellitePlot.params.Name,RMS_TrackingError_AngRad*180/pi,Energy2Reac_Total_J_Arr(end),SatellitePlot.TotalRunTime_s);
 
     % Angular velocity
     ha(kk) = nexttile(kk); kk = kk + 1; hold on; 
@@ -59,6 +66,13 @@ for s = 1:nSat
     % yline(MaxReacWheelAngAccRads2/(2*pi)*60^2,'r--'); yline(-MaxReacWheelAngAccRads2/(2*pi)*60^2,'r--'); 
     ylabel('(RPM2)');
     xlabel('Time (s)');
+
+    % Energy supplied to reaction wheels
+    ha(kk) = nexttile(kk); kk = kk + 1; hold on; 
+    plot(tArr,Energy2Reac_Total_J_Arr,'Color',RspCol, 'LineWidth', mLineWidth);
+    ylabel('[J]');
+    title('Total energy to reaction wheels','Interpreter','latex');
+    
     
 end
 lg  = legend([lege legeCmd],'Orientation','Horizontal','FontSize',10, 'NumColumns', 2); 

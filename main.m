@@ -9,9 +9,9 @@ planet.R = 6.63781e6; % m
 planet.G = 6.67430e-11; % m^3/kg/s^2
 
 %% Simulation parameters
-Tend = 1002; %[secs]
+Tend = 100; %[secs]
 Ts = 3; % sampling period
-Nsim = Tend/Ts;
+Nsim = floor(Tend/Ts);
 
 h0 = 500e3; % initial satellite height above ground [m]
 i0 = 0; % initial satellite inclination [deg]
@@ -26,8 +26,8 @@ V0 = [0;v_orbit*cosd(i0);v_orbit*sind(i0)]; % pqr ??
 
 % Q0: initial quaternion (Scaler-last) representing rotation of satellite body frame w.r.t. ECI frame
 phi = 0*pi/180; % rad angular positino about x
-theta = 0; % rad angular position about y
-psi = 0; % rad angular position about z
+theta = 0*pi/180; % rad angular position about y
+psi = 0*pi/180; % rad angular position about z
 quat_scalar_first = eul2quat([psi, theta, phi], 'ZYX'); % quaternion in inertial frame FA
 Q0_A = [quat_scalar_first(2:4)'; quat_scalar_first(1)]; % convert to scalar last
 
@@ -48,6 +48,7 @@ sat_params.J_SatBody_C_Mean = mean(diag(sat_params.J_SatBody_C));
 sat_params.I_ws = 0.5*0.137*(23/1000)^2 ;%Estimated from NanoAvio 0.5mr2 10;  % spin axis moments of inertia (wrt wheel's center-of-mass, in principal wheel frame) [kgm2]
 % sat_params.gs_b_arr = [1 0 0;0 1 0; 0 0 1;1/sqrt(3) 1/sqrt(3) 1/sqrt(3);]'; % unit spin axis in satellite body's frame Fb [column vector x N_react] matrix
 sat_params.gs_b_arr = [2 0 1; -2 0 1; 0 2 1; 0 -2 1]'/sqrt(5); % NanoAvio 4RW0 configuration
+sat_params.gs_b_arr = [1 0 0;-1 0 0; 0 1 0; 0 -1 0; 0 0 1; 0 0 -1]'; % 6 configuration
 sat_params.MassReactionWheel = 0.137; %2; % mass of SINGLE reaction wheel, to be added to satellite mass [Kg]
 
 
@@ -67,16 +68,18 @@ Satellite_PID = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
 
 sat_params.ControlScheme = 509;  sat_params.Name = 'NMPC1'; 
 sat_params.q_err_quat_vec_BR_Body = 20;
-sat_params.q_Delta_W_Body = 3000;
+sat_params.q_Delta_W_Body = 500;
 sat_params.r_Delta_U = 0.00;
-sat_params.r_U = 0.0075;
+sat_params.r_U = 0.01;
+sat_params.Renergy = 0;
 Satellite_NMPC1 = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
 
 sat_params.ControlScheme = 509;  sat_params.Name = 'NMPC2'; 
 sat_params.q_err_quat_vec_BR_Body = 20;
-sat_params.q_Delta_W_Body = 3000;
-sat_params.r_Delta_U = 0.001;
-sat_params.r_U = 0.002;
+sat_params.q_Delta_W_Body = 1000;
+sat_params.r_Delta_U = 0.00;
+sat_params.r_U = 0.0075;
+sat_params.Renergy = 10;
 Satellite_NMPC2 = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
 
 SatelliteArr = [Satellite_PID,Satellite_NMPC1];%,Satellite_NMPC2];
@@ -126,16 +129,21 @@ for k = 0:(Nsim-1)
 end
 
 %% Plot results
+close all
 figN = 1;
-SatellitePlot = Satellite_PID; % select satellite to plot
-statesArr = SatellitePlot.statesArr(:,1:end-1);
-UarrStore = SatellitePlot.UarrStore;
-tArr = SatellitePlot.tArr;
-OmegaCmdA_BodyArr = SatellitePlot.OmegaCmdA_BodyArr;
-QuatRefA_A_Arr = SatellitePlot.QuatRefA_A_Arr;
-Err_BR_AngRadArr = SatellitePlot.Err_BR_AngRadArr;
+for s = 1:nSat
+    SatellitePlot = SatelliteArr(s); % select satellite to plot
+    statesArr = SatellitePlot.statesArr(:,1:end-1);
+    UarrStore = SatellitePlot.UarrStore;
+    tArr = SatellitePlot.tArr;
+    OmegaCmdA_BodyArr = SatellitePlot.OmegaCmdA_BodyArr;
+    QuatRefA_A_Arr = SatellitePlot.QuatRefA_A_Arr;
+    Err_BR_AngRadArr = SatellitePlot.Err_BR_AngRadArr;
+    
+    PlotAttitude1;
 
-PlotAttitude1;
+end
+
 
 PlotAttitude2;
 return;

@@ -41,6 +41,8 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
         tStart_tic
         TotalRunTime_s
 
+        Energy2React_Total_J = 0
+
     end
     
     methods (Access = public)
@@ -260,13 +262,14 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
                     Q_Delta_W_Body = obj.params.q_Delta_W_Body*eye(3);
                     R_Delta_U  = obj.params.r_Delta_U*eye(obj.params.N_react);
                     R_U = obj.params.r_U*eye(obj.params.N_react);
+                    Renergy = obj.params.Renergy;
 
                     if obj.SimCnt ==0 obj.UarrGuess_Prev_509 = ones(obj.params.N_react*ell,1)*0.01;end
 
                     Ukm1_MPC4 = obj.UarrGuess_Prev_509(1:obj.params.N_react);
 
-                    obj_ = @(Uarr) SatelliteClass.obj_fun_MPC_Option4(obj.params,Uarr,Xk_MPC4,Ukm1_MPC4,ell,xRefArr,Q_err_quat_vec_BR_Body,Q_Delta_W_Body,R_Delta_U,R_U);
-                    NONLCON = @(Uarr) SatelliteClass.constr_fun_MPC_Option4(Uarr,Xk_MPC4,ell,W_mag_rads_limit,obj.params);
+                    obj_ = @(Uarr) SatelliteClass.obj_fun_MPC_Option4(obj.params,Uarr,Xk_MPC4,Ukm1_MPC4,ell,xRefArr,Q_err_quat_vec_BR_Body,Q_Delta_W_Body,R_Delta_U,R_U,Renergy,obj.Energy2React_Total_J);
+                    NONLCON = @(Uarr) SatelliteClass.constr_fun_MPC_Option4(Uarr,Xk_MPC4,ell,W_mag_rads_limit,obj.params,obj.Energy2React_Total_J);
                     % fmincon(J,W0,A1,B1,A2,B2,LB_W,UB_W,NONLCON), min(W) J(W) s.t. A1*W  <= B1, A2*W  = B2
                     % LB_W <= W <= UB_W. [g,h] = NONLCON(W) where g(W) <= 0, h(W) = 0 and 
                     
@@ -312,6 +315,8 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
            obj.QuatRefA_A_Arr(:,obj.SimCnt + 1) = QuatRefA_A;
            obj.TorqueB_C_ResB_Prev = TorqueB_C_ResB;
            obj.U_Prev = U;
+           obj.Energy2React_Total_J = obj.Energy2React_Total_J + ...
+               sum((obj.params.I_ws*obj.UarrStore(:,obj.SimCnt + 1).*obj.statesArr(13 + (1:obj.params.N_react),obj.SimCnt + 2)))*obj.params.Ts;
 
            obj.SimCnt = obj.SimCnt + 1;
            obj.SimT = obj.SimCnt*obj.params.Ts;
@@ -362,16 +367,16 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
 
             W_BA_B_dot = params.Itot_inv_Body*(-cross(W_BA_B,params.Itot_Body*W_BA_B) - TorqueReacFF_ResB...
                                                 -params.gs_b_arr*params.I_ws*U_MPC4);
-            Xd = [q_dot; W_BA_B_dot;U_MPC4];            
+            Xd = [q_dot; W_BA_B_dot;U_MPC4;params.I_ws*omega_reac'*U_MPC4];            
         end
         % Define objective function
-        function J = obj_fun_MPC_Option4(params,Uarr,Xk_MPC4,Ukm1_MPC4,ell,Xref_Arr,Q_err_quat_vec_BR_Body,Q_Delta_W_Body,R_Delta_U,R_U)
+        function J = obj_fun_MPC_Option4(params,Uarr,Xk_MPC4,Ukm1_MPC4,ell,Xref_Arr,Q_err_quat_vec_BR_Body,Q_Delta_W_Body,R_Delta_U,R_U,Renergy,Energy2React_Total_J)
             Uarr = reshape(Uarr,params.N_react,ell);
 
             QuatRefA_A_Arr = Xref_Arr(1:4,:);
             OmegaRefA_Ref_Arr = Xref_Arr(5:7,:);
 
-            X_Arr = ODE_RK4(@SatelliteClass.f_cont_MPC_Option4,Xk_MPC4,ell,Uarr,params.Ts,params);
+            X_Arr = ODE_RK4(@SatelliteClass.f_cont_MPC_Option4,[Xk_MPC4 ;Energy2React_Total_J],ell,Uarr,params.Ts,params);
             X_Arr = X_Arr(:,2:end);           
 
             % delta w error in body frame (assume to be approx ref frame at every prediction step)
@@ -400,29 +405,49 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             % Control rate
             Delta_U_kArr = diff([Ukm1_MPC4 Uarr],1,2);
 
+            omega_reac_Arr = X_Arr(8:(7 + params.N_react),:);
+
+            % Power and energy
+            Power_reac_arr = params.I_ws*omega_reac_Arr.*Uarr;
+            Energy2Reac_Total = sum(sum(Power_reac_arr*params.Ts,1));
+            Energy2Reac_Arr = X_Arr(end,:);
+
+            R_OmegaReac = 0.0; 
             % Compute cost function
             J = 0;
             for i = 0:(ell-1)
                 J = J + err_quat_BR_Body_kArr(1:3,i+1)'*Q_err_quat_vec_BR_Body*err_quat_BR_Body_kArr(1:3,i+1) + ...
                         Delta_W_Body_kArr(:,i+1)'*Q_Delta_W_Body*Delta_W_Body_kArr(:,i+1) + ...
                         Delta_U_kArr(:,i+1)'*R_Delta_U*Delta_U_kArr(:,i+1) + ...
-                        Uarr(:,i+1)'*R_U*Uarr(:,i+1);
+                        Uarr(:,i+1)'*R_U*Uarr(:,i+1) + ...
+                        omega_reac_Arr(:,i+1)'*R_OmegaReac*omega_reac_Arr(:,i+1);
             end            
+
+            J = J + Energy2Reac_Arr*Renergy*Energy2Reac_Arr';
         end
 
         % Define constraint function
-        function [g,h] = constr_fun_MPC_Option4(Uarr,Xk_MPC4,ell,W_mag_rads_limit,params)
+        function [g,h] = constr_fun_MPC_Option4(Uarr,Xk_MPC4,ell,W_mag_rads_limit,params,Energy2React_Total_J)
             % Note: g(Uarr) <=0, h(Uarr) = 0
             Uarr = reshape(Uarr,params.N_react,ell);
 
-            X_Arr = ODE_RK4(@SatelliteClass.f_cont_MPC_Option4,Xk_MPC4,ell,Uarr,params.Ts,params);
+            omega_reac_limit = 100*2*pi/60;
+
+            X_Arr = ODE_RK4(@SatelliteClass.f_cont_MPC_Option4,[Xk_MPC4;Energy2React_Total_J],ell,Uarr,params.Ts,params);
             X_Arr = X_Arr(:,2:end);    
             
+
+            omega_reac_Arr = X_Arr(8:(7 + params.N_react),:);
 
             pRadsArr= X_Arr(5,:); qRadsArr=  X_Arr(6,:); rRadsArr=  X_Arr(7,:);
             w_BA_B_RadsMagArr = sqrt(pRadsArr.^2 + qRadsArr.^2 + rRadsArr.^2);
 
-            g = w_BA_B_RadsMagArr -W_mag_rads_limit;            
+            g1 = w_BA_B_RadsMagArr -W_mag_rads_limit;  
+
+            g2 = omega_reac_Arr(end,:) - omega_reac_limit;
+            g3 = -omega_reac_Arr(end,:) - omega_reac_limit;
+
+            g = [g1;g2;g3];
             h = [];
         end
         % End ---------- 3D attitude control option 4 (reaction wheel Nonlin MPC -----------------
