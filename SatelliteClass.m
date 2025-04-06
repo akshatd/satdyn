@@ -39,7 +39,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
         UarrGuess_Prev_509  % previous iteration's optimal guess
 
         tStart_tic
-        TotalRunTime_s
+        TotalRunTime_s = 0;
 
         Energy2React_Total_J = 0
 
@@ -109,7 +109,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             obj.params.Itot_Body = obj.params.J_SatBody_C; % NOTE!! Assumes J_SatBody_C includes ALL N_react reaction wheel's contribution too for simplicity
             obj.params.Itot_inv_Body = inv(obj.params.Itot_Body);
 
-            obj.tStart_tic = tic;
+            
         end
 
         function [U,TorqueB_C_ResB] = GetControls(obj,PosRef,VelRef,QuatRefA_A,OmegaRefA_A)
@@ -295,7 +295,9 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             % 1 step in the current simulation
 
             % Compute controls
+            obj.tStart_tic = tic;
             [U,TorqueB_C_ResB] = obj.GetControls(PosRef,VelRef,QuatRefA_A,OmegaRefA_A);
+            obj.TotalRunTime_s = obj.TotalRunTime_s + toc(obj.tStart_tic); 
 
             if obj.SimCnt == 0 % init UarrStore based on number of controls
                 obj.UarrStore = zeros(length(U),obj.params.Nsim);
@@ -320,9 +322,6 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
 
            obj.SimCnt = obj.SimCnt + 1;
            obj.SimT = obj.SimCnt*obj.params.Ts;
-           
-
-           obj.TotalRunTime_s = toc(obj.tStart_tic); 
            
            if mod(obj.SimCnt,10) == 0 fprintf('%d\n',obj.SimCnt); end
 
@@ -572,7 +571,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             external_torque = zeros(3,1); % Edit here for external torques 
             % external_torque = [3;-2;1]*0.001;
             I_wdot = -cross(omega,sat_params.Itot_Body*omega) + external_torque;
-            OmeReacDot = U(1:sat_params.N_react);
+            OmeReacDot = U(1:sat_params.N_react);% - tau_v*omega_reac/sat_params.I_ws;
 
             % Get internal torque
             if ~isempty(TorqueB_C_ResB)

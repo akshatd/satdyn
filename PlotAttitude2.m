@@ -77,3 +77,5 @@ for s = 1:nSat
 end
 lg  = legend([lege legeCmd],'Orientation','Horizontal','FontSize',10, 'NumColumns', 2); 
 lg.Layout.Tile = 'South'; % <-- Legend placement with tiled layout
+
+linkaxes(ha,'x');

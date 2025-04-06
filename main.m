@@ -104,7 +104,7 @@ for k = 0:(Nsim-1)
     % QuatRefA_Body = [zeros(3,1);1]; 
 
     % Set attitude rate reference
-    if true % numerical differentiate QuatRefA_Body, followed by least-squares estimate of OmegaRefA_Body
+    if true % numerical differentiate QuatRefA_A, followed by least-squares estimate of OmegaRefA_A
         if k == 0 QuatRefA_A_Prev = QuatRefA_A;end
         delta_QuatRefA_A = QuatRefA_A - QuatRefA_A_Prev;
         Amat = Ts/2*[
