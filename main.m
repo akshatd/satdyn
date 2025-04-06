@@ -9,7 +9,7 @@ planet.R = 6.63781e6; % m
 planet.G = 6.67430e-11; % m^3/kg/s^2
 
 %% Simulation parameters
-Tend = 3000; %[secs]
+Tend = 2500; %[secs]
 Ts = 3; % sampling period
 Nsim = floor(Tend/Ts);
 
@@ -63,10 +63,10 @@ W_React0arr = zeros(size(sat_params.gs_b_arr,2),1);
 % 509 = 3D attitude control option 4 using reaction wheels nonlinear MPC
 
 
-sat_params.ControlScheme = 506;  sat_params.Name = 'PID';
+sat_params.ControlScheme = 506;  sat_params.Name = 'PD';
 Satellite_PID = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
 
-sat_params.ControlScheme = 509;  sat_params.Name = 'NMPC1'; 
+sat_params.ControlScheme = 509;  sat_params.Name = 'NMPC'; 
 sat_params.q_err_quat_vec_BR_Body = 20;
 sat_params.q_Delta_W_Body = 500;
 sat_params.r_Delta_U = 0.00;
@@ -147,6 +147,8 @@ end
 
 
 PlotAttitude2;
+PlotAttitude3;
+PlotAttitude4;
 return;
 
 % plot earth and satellite in 3D

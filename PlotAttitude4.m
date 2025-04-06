@@ -1,7 +1,6 @@
 
 timeDesc = 'Time [s]';
 RspCollArr = {[0 0.4470 0.7410],[0.4940 0.1840 0.5560],[0.4660 0.6740 0.1880]	};
-LineStyleArr = {'-','-.','-*'};
 lege = [];
 yFontSize = 12;
 for s = 1:nSat
@@ -31,7 +30,7 @@ for s = 1:nSat
 
     if s == 1
         figure(figN); figN = figN + 1; ha = [];
-        nRows = 2; nCols = 2;
+        nRows = 4; nCols = 2;
         RspCol = 'b'; CmdCol = 'r--'; mLineWidth = 1.5;
 
         tcl = tiledlayout(nRows,nCols,'TileSpacing','tight','Padding','tight'); % "loose", "compact", "tight" or "none"
@@ -41,42 +40,45 @@ for s = 1:nSat
     RspCol = RspCollArr{s}';
     LineStyle = LineStyleArr{s};
 
-    % Angular velocity
+    % Reaction wheel speed
     ha(kk) = nexttile(kk); kk = kk + 1; hold on; 
-    plot(tArr,w_BA_B_RadsMagArr,'Color',RspCol,'linestyle',LineStyle, 'LineWidth', mLineWidth);
-    if s == nSat legeCmd = plot(tArr,w_CmdA_B_RadsMagArr,CmdCol, 'LineWidth', mLineWidth,'DisplayName','Reference'); end
-    ylabel('$|w^B|$ [rad/s]','Interpreter','latex','FontSize',yFontSize);
+    plot(tArr,omega_reac(1,:)/(2*pi)*60,'Color',RspCol,'linestyle',LineStyle, 'LineWidth', mLineWidth);
+    ylabel('$\Omega_1$ [RPM]','Interpreter','latex','FontSize',yFontSize);
 
-    % angle error
     ha(kk) = nexttile(kk); kk = kk + 1; hold on; 
-    plot(tArr,Err_BR_AngRadArr,'Color',RspCol,'linestyle',LineStyle, 'LineWidth', mLineWidth);
-    ylabel('$\Phi_e$ [rad]','Interpreter','latex','FontSize',yFontSize);
+    plot(tArr,omega_reac(2,:)/(2*pi)*60,'Color',RspCol,'linestyle',LineStyle, 'LineWidth', mLineWidth);
+    ylabel('$\Omega_2$ [RPM]','Interpreter','latex','FontSize',yFontSize);
 
-    % Plot reaction wheels
     ha(kk) = nexttile(kk); kk = kk + 1; hold on; 
-    plot(tArr,max(abs(statesArr(13+(1:SatellitePlot.params.N_react),:)),[],1)/(2*pi)*60,'Color',RspCol,'linestyle',LineStyle, 'LineWidth', mLineWidth);  
-    % yline(6500,'r--'); yline(-6500,'r--'); % NanoAvio Max RPM
-    ylabel('$|\Omega_i|_{max}$ [RPM]','Interpreter','latex','FontSize',yFontSize);
+    plot(tArr,omega_reac(3,:)/(2*pi)*60,'Color',RspCol,'linestyle',LineStyle, 'LineWidth', mLineWidth);
+    ylabel('$\Omega_3$ [RPM]','Interpreter','latex','FontSize',yFontSize);
+
+    ha(kk) = nexttile(kk); kk = kk + 1; hold on; 
+    plot(tArr,omega_reac(4,:)/(2*pi)*60,'Color',RspCol,'linestyle',LineStyle, 'LineWidth', mLineWidth);
+    ylabel('$\Omega_4$ [RPM]','Interpreter','latex','FontSize',yFontSize);
+
+    % Reaction wheel acceleration
+    ha(kk) = nexttile(kk); kk = kk + 1; hold on; 
+    plot(tArr,UarrStore(1,:)/(2*pi)*60^2,'Color',RspCol,'linestyle',LineStyle, 'LineWidth', mLineWidth);
+    ylabel('$\dot{\Omega}_1$ [RPM$^2$]','Interpreter','latex','FontSize',yFontSize);
+
+    ha(kk) = nexttile(kk); kk = kk + 1; hold on; 
+    plot(tArr,UarrStore(2,:)/(2*pi)*60^2,'Color',RspCol,'linestyle',LineStyle, 'LineWidth', mLineWidth);
+    ylabel('$\dot{\Omega}_2$ [RPM$^2$]','Interpreter','latex','FontSize',yFontSize);
+
+
+    ha(kk) = nexttile(kk); kk = kk + 1; hold on; 
+    plot(tArr,UarrStore(3,:)/(2*pi)*60^2,'Color',RspCol,'linestyle',LineStyle, 'LineWidth', mLineWidth);
+    ylabel('$\dot{\Omega}_3$ [RPM$^2$]','Interpreter','latex','FontSize',yFontSize);
     xlabel(timeDesc,'FontSize',yFontSize);
-
+    
     ha(kk) = nexttile(kk); kk = kk + 1; hold on; 
-    % title('Maximum reaction wheel acceleration');
-    lege(end+1) = plot(tArr,max(abs(UarrStore(:,:)),[],1)/(2*pi)*60^2,'Color', RspCol,'linestyle',LineStyle,'LineWidth', mLineWidth,'DisplayName',SatellitePlot.params.Name);  
-    MaxTorque = 3.2/1000; % NanoAvio Max torque
-    MaxReacWheelAngAccRads2 = MaxTorque/sat_params.I_ws;
-    % yline(MaxReacWheelAngAccRads2/(2*pi)*60^2,'r--'); yline(-MaxReacWheelAngAccRads2/(2*pi)*60^2,'r--'); 
-    ylabel('$|\dot{\Omega}_i|_{max}$ [RPM$^2$]','Interpreter','latex','FontSize',yFontSize);
+    lege(end+1) = plot(tArr,UarrStore(4,:)/(2*pi)*60^2,'Color',RspCol,'linestyle',LineStyle, 'LineWidth', mLineWidth,'DisplayName',SatellitePlot.params.Name);
+    ylabel('$\dot{\Omega}_4$ [RPM$^2$]','Interpreter','latex','FontSize',yFontSize);
     xlabel(timeDesc,'FontSize',yFontSize);
-
-    % % Energy supplied to reaction wheels
-    % ha(kk) = nexttile(kk); kk = kk + 1; hold on; 
-    % plot(tArr,Energy2Reac_Total_J_Arr,'Color',RspCol,'linestyle',LineStyle, 'LineWidth', mLineWidth);
-    % ylabel('[J]');
-    % title('Total energy to reaction wheels','Interpreter','latex');
-    
-    
 end
-lg  = legend([lege legeCmd],'Orientation','Horizontal','FontSize',10, 'NumColumns', 3); 
+lg  = legend([lege],'Orientation','Horizontal','FontSize',10, 'NumColumns', 3); 
 lg.Layout.Tile = 'South'; % <-- Legend placement with tiled layout
 
 linkaxes(ha,'x');
+
