@@ -30,7 +30,7 @@ theta = 0*pi/180; % rad angular position about y
 psi = 0*pi/180; % rad angular position about z
 quat_scalar_first = eul2quat([psi, theta, phi], 'ZYX'); % quaternion in inertial frame FA
 Q0_A = [quat_scalar_first(2:4)'; quat_scalar_first(1)]; % convert to scalar last
-
+% Q0_A = [1 0 0 0]';
 % W0: initial angular velocity of satellite body w.r.t. ECI frame, expressed in body frame
 W0 = [0.0; 0.0; 0.0];
 

@@ -26,7 +26,7 @@ for s = 1:nSat
     Energy2Reac_Total_J_Arr = cumtrapz(sum(Power_reac*Ts,1));
 
     RMS_TrackingError_AngRad = sqrt(sum(Err_BR_AngRadArr.^2)/Nsim);
-    fprintf('%s Tracking RMS angle error [deg] %f Final enery [J] %f Total compute time [s] %f\n',SatellitePlot.params.Name,RMS_TrackingError_AngRad*180/pi,Energy2Reac_Total_J_Arr(end),SatellitePlot.TotalRunTime_s);
+    % fprintf('%s Tracking RMS angle error [deg] %f Final enery [J] %f Total compute time [s] %f\n',SatellitePlot.params.Name,RMS_TrackingError_AngRad*180/pi,Energy2Reac_Total_J_Arr(end),SatellitePlot.TotalRunTime_s);
 
     if s == 1
         figure(figN); figN = figN + 1; ha = [];
@@ -71,7 +71,7 @@ for s = 1:nSat
     plot(tArr,UarrStore(3,:)/(2*pi)*60^2,'Color',RspCol,'linestyle',LineStyle, 'LineWidth', mLineWidth);
     ylabel('$\dot{\Omega}_3$ [RPM$^2$]','Interpreter','latex','FontSize',yFontSize);
     xlabel(timeDesc,'FontSize',yFontSize);
-    
+
     ha(kk) = nexttile(kk); kk = kk + 1; hold on; 
     lege(end+1) = plot(tArr,UarrStore(4,:)/(2*pi)*60^2,'Color',RspCol,'linestyle',LineStyle, 'LineWidth', mLineWidth,'DisplayName',SatellitePlot.params.Name);
     ylabel('$\dot{\Omega}_4$ [RPM$^2$]','Interpreter','latex','FontSize',yFontSize);

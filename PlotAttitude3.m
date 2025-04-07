@@ -26,7 +26,7 @@ for s = 1:nSat
     Energy2Reac_Total_J_Arr = cumtrapz(sum(Power_reac*Ts,1));
 
     RMS_TrackingError_AngRad = sqrt(sum(Err_BR_AngRadArr.^2)/Nsim);
-    fprintf('%s Tracking RMS angle error [deg] %f Final enery [J] %f Total compute time [s] %f\n',SatellitePlot.params.Name,RMS_TrackingError_AngRad*180/pi,Energy2Reac_Total_J_Arr(end),SatellitePlot.TotalRunTime_s);
+    % fprintf('%s Tracking RMS angle error [deg] %f Final enery [J] %f Total compute time [s] %f\n',SatellitePlot.params.Name,RMS_TrackingError_AngRad*180/pi,Energy2Reac_Total_J_Arr(end),SatellitePlot.TotalRunTime_s);
 
     if s == 1
         figure(figN); figN = figN + 1; ha = [];
@@ -39,7 +39,7 @@ for s = 1:nSat
     end
     RspCol = RspCollArr{s}';
     LineStyle = LineStyleArr{s};
-    
+
     % quat
     ha(kk) = nexttile(kk); kk = kk + 1; hold on; 
     plot(tArr,quats(:,1),'Color',RspCol,'linestyle',LineStyle, 'LineWidth', mLineWidth);

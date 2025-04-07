@@ -431,7 +431,7 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             % Note: g(Uarr) <=0, h(Uarr) = 0
             Uarr = reshape(Uarr,params.N_react,ell);
 
-            omega_reac_limit = 200000*2*pi/60;
+            omega_reac_limit = 200*2*pi/60;
 
             X_Arr = ODE_RK4(@SatelliteClass.f_cont_MPC_Option4,[Xk_MPC4;Energy2React_Total_J],ell,Uarr,params.Ts,params);
             X_Arr = X_Arr(:,2:end);    
@@ -447,7 +447,10 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
             g2 = omega_reac_Arr(1,:) - omega_reac_limit;
             g3 = -omega_reac_Arr(1,:) - omega_reac_limit;
 
-            g = [g1;g2;g3];
+            % g2 = sqrt(omega_reac_Arr(1,:).^2 + omega_reac_Arr(2,:).^2) - omega_reac_limit;
+            % g3 = -sqrt(omega_reac_Arr(1,:).^2 + omega_reac_Arr(2,:).^2)- omega_reac_limit;
+
+            g = [g1';g2';g3'];
             h = [];
         end
         % End ---------- 3D attitude control option 4 (reaction wheel Nonlin MPC -----------------
