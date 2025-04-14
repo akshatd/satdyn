@@ -63,10 +63,13 @@ W_React0arr = zeros(size(sat_params.gs_b_arr,2),1);
 % 509 = 3D attitude control option 4 using reaction wheels nonlinear MPC
 
 
-sat_params.ControlScheme = 506;  sat_params.Name = 'PD';
+sat_params.ControlScheme = 506;  sat_params.Name = 'PD (Using RW1)';
 Satellite_PID = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
 
-sat_params.ControlScheme = 509;  sat_params.Name = 'NMPC'; 
+sat_params.ControlScheme = 506;  sat_params.Name = 'PD (Not using RW1)';
+Satellite_PID_Degraded = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
+
+sat_params.ControlScheme = 509;  sat_params.Name = 'NMPC (RW1 limited RPM)'; 
 sat_params.q_err_quat_vec_BR_Body = 20;
 sat_params.q_Delta_W_Body = 500;
 sat_params.r_Delta_U = 0.00;
@@ -83,7 +86,7 @@ sat_params.r_U = 0.0075;
 sat_params.Renergy = 10;
 Satellite_NMPC2 = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
 
-SatelliteArr = [Satellite_PID,Satellite_NMPC1];%,Satellite_NMPC2];
+SatelliteArr = [Satellite_PID,Satellite_NMPC1,Satellite_PID_Degraded];%,Satellite_NMPC2];
 nSat = length(SatelliteArr);
 %% Simulate 
 QuatRefA_A = Q0_A; % set initial quat refA

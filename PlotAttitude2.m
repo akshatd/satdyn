@@ -1,7 +1,7 @@
 
 timeDesc = 'Time [s]';
 RspCollArr = {[0 0.4470 0.7410],[0.4940 0.1840 0.5560],[0.4660 0.6740 0.1880]	};
-LineStyleArr = {'-','-.','-*'};
+LineStyleArr = {'-','-.',':'};
 lege = [];
 yFontSize = 14;
 for s = 1:nSat

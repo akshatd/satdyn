@@ -206,6 +206,13 @@ classdef SatelliteClass < handle & matlab.mixin.Heterogeneous
 
                     Tau = TorqueB_C_ResB + TorqueReacFF_ResB;
                     U = -obj.params.gs_b_arr_MinNorm *Tau/obj.params.I_ws;
+                    if strcmp(obj.params.Name,'PD (Not using RW1)')
+                        G3_inv = [-1.118033988749895                   0                   0;
+                               0.559016994374947   0.559016994374947   1.118033988749895;
+                               0.559016994374947  -0.559016994374947   1.118033988749895];
+                        U = -G3_inv *Tau/obj.params.I_ws;
+                        U = [0;U];
+                    end
                     U(U > Umag_rads2_limit) = Umag_rads2_limit;
                     U(U < -Umag_rads2_limit) = -Umag_rads2_limit; %if norm(U) > Umag_rads2_limit U = U*Umag_rads2_limit/norm(U);end
                     
