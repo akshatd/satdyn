@@ -1,5 +1,6 @@
 %% Satellite dynamics 6-DOF simulation
-clc; clear; close all;
+clc; close all;
+clearvars -except Omega1_LimitArr_RPM MC Omega1_Limit_RPM RMS_TrackingError_AngRad_Arr Omega234_Max_Max_Arr li
 addpath("JpHelp\");
 
 %% set up planet parameters
@@ -76,17 +77,15 @@ sat_params.r_Delta_U = 0.00;
 sat_params.r_U = 0.0075;
 sat_params.Renergy = 0;
 sat_params.r_sparse = 0.0;
+sat_params.Omega1_Limit_RPM = 10000;
 Satellite_NMPC1 = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
 
-sat_params.ControlScheme = 509;  sat_params.Name = 'NMPC2'; 
-sat_params.q_err_quat_vec_BR_Body = 20;
-sat_params.q_Delta_W_Body = 1000;
-sat_params.r_Delta_U = 0.00;
-sat_params.r_U = 0.0075;
-sat_params.Renergy = 10;
-Satellite_NMPC2 = SatelliteClass(sat_params,R0,V0,Q0_A,W0,W_React0arr,planet);
-
+% Select the satellites here
 SatelliteArr = [Satellite_PID,Satellite_NMPC1,Satellite_PID_Degraded];%,Satellite_NMPC2];
+SatelliteArr = [Satellite_PID]; % Basic PID attitude controller
+SatelliteArr = [Satellite_NMPC1]; % JP nonlinear MPC attitude controller
+
+
 nSat = length(SatelliteArr);
 %% Simulate 
 QuatRefA_A = Q0_A; % set initial quat refA
@@ -152,7 +151,7 @@ end
 PlotAttitude2;
 PlotAttitude3;
 PlotAttitude4;
-return;
+% return;
 
 % plot earth and satellite in 3D
 [X, Y, Z] = sphere();
